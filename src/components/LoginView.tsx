@@ -221,7 +221,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
                   fontSize: "14px",
                 }}
               >
-                방법 1: 학년/반/번호로 로그인
+                학년/반/번호로 로그인
               </label>
               <div
                 style={{
@@ -287,6 +287,16 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
                   }}
                 />
               </div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                }}
+              >
+                비밀번호
+              </label>
               <input
                 type="password"
                 placeholder="비밀번호 (생년월일 4자리)"
@@ -334,70 +344,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
                 fontWeight: "bold",
                 fontSize: "16px",
                 cursor: "pointer",
-                marginBottom: "20px",
               }}
             >
               로그인
             </button>
-
-            <div
-              style={{
-                borderTop: "1px solid #ddd",
-                paddingTop: "20px",
-                marginTop: "20px",
-              }}
-            >
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  fontWeight: "bold",
-                  fontSize: "14px",
-                }}
-              >
-                방법 2: 바코드로 로그인
-              </label>
-              <input
-                type="text"
-                placeholder="학생증 바코드 스캔"
-                value={loginForm.barcode}
-                onChange={(e) =>
-                  setLoginForm({ ...loginForm, barcode: e.target.value })
-                }
-                onCompositionStart={() => setIsComposing(true)}
-                onCompositionEnd={() => setIsComposing(false)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !isComposing) {
-                    handleBarcodeLogin();
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  marginBottom: "10px",
-                  boxSizing: "border-box",
-                  fontSize: "14px",
-                }}
-              />
-              <button
-                onClick={handleBarcodeLogin}
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  background: "#10B981",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontWeight: "bold",
-                  fontSize: "16px",
-                  cursor: "pointer",
-                }}
-              >
-                바코드 로그인
-              </button>
-            </div>
           </>
         )}
 
