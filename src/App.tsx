@@ -188,11 +188,11 @@ const App: React.FC = () => {
           onClose={() => setShowLogin(false)}
           onLoginSuccess={(type, data) => {
             if (type === "student") {
-              setLoggedInStudent(data);
+              setLoggedInStudent(data as Student);
               setView("student");
             } else {
-              setLoggedInUser(data);
-              setView(data.role === "admin" ? "admin" : "teacher");
+              setLoggedInUser(data as User);
+              setView((data as User).role === "admin" ? "admin" : "teacher");
             }
             setShowLogin(false);
           }}
