@@ -173,11 +173,15 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         return;
       }
 
-      const { error } = await supabase
-        .from("students")
-        .upsert(updates, { onConflict: "id" });
+      // ✅ upsert 대신 update 사용 (각각 개별 업데이트)
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("students")
+          .update({ fixed_seat_id: update.fixed_seat_id })
+          .eq("id", update.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       alert(`${updates.length}명의 좌석 배정이 완료되었습니다.`);
       setSeatAssignments({});
@@ -195,16 +199,15 @@ const TeacherView: React.FC<TeacherViewProps> = ({
     }
 
     try {
-      const updates = classStudents.map((s) => ({
-        id: s.id,
-        fixed_seat_id: null,
-      }));
+      // ✅ 각 학생별로 개별 업데이트
+      for (const student of classStudents) {
+        const { error } = await supabase
+          .from("students")
+          .update({ fixed_seat_id: null })
+          .eq("id", student.id);
 
-      const { error } = await supabase
-        .from("students")
-        .upsert(updates, { onConflict: "id" });
-
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       alert("모든 고정 좌석이 해제되었습니다.");
       setSeatAssignments({});
@@ -214,7 +217,6 @@ const TeacherView: React.FC<TeacherViewProps> = ({
       alert("좌석 해제에 실패했습니다.");
     }
   };
-
   const isMobile = window.innerWidth < 768;
 
   return (
