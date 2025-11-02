@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
-import { Student, Seat, Reservation } from "../App";
+import { Student, Seat, Reservation, User } from "../App";
 
 interface StudentViewProps {
   loggedInStudent: Student | null;
+  loggedInUser?: User | null;
   seats: Seat[];
   reservations: Reservation[];
   currentDate: string;
@@ -13,6 +14,7 @@ interface StudentViewProps {
 
 const StudentView: React.FC<StudentViewProps> = ({
   loggedInStudent,
+  loggedInUser,
   seats,
   reservations,
   currentDate,
@@ -20,23 +22,50 @@ const StudentView: React.FC<StudentViewProps> = ({
   onShowLogin,
 }) => {
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
+
+  const isAdmin = loggedInUser?.role === "admin";
+  const currentStudent = selectedStudent || loggedInStudent;
+
+  // ✅ 모든 useEffect를 최상단에 배치
+  useEffect(() => {
+    if (isAdmin) {
+      loadStudents();
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
-    // 고정 좌석이 있으면 자동 선택
-    if (loggedInStudent?.fixed_seat_id) {
+    if (currentStudent?.fixed_seat_id) {
       const fixedSeat = seats.find(
-        (s) => s.id === loggedInStudent.fixed_seat_id
+        (s) => s.id === currentStudent.fixed_seat_id
       );
       if (fixedSeat) {
         setSelectedSeat(fixedSeat);
       }
     }
-  }, [loggedInStudent, seats]);
+  }, [currentStudent, seats]);
 
-  if (!loggedInStudent) {
+  const loadStudents = async () => {
+    const { data } = await supabase
+      .from("students")
+      .select("*")
+      .order("grade")
+      .order("class")
+      .order("number");
+
+    if (data) {
+      setStudents(data);
+    }
+  };
+
+  // ✅ 이제 조건부 렌더링 (모든 Hook 이후)
+  if (!loggedInStudent && (!loggedInUser || loggedInUser.role !== "admin")) {
     return (
       <div style={{ padding: "20px", textAlign: "center" }}>
-        <p style={{ fontSize: "14px" }}>로그인이 필요합니다.</p>
+        <p style={{ fontSize: "14px" }}>
+          학생 로그인 또는 관리자 권한이 필요합니다.
+        </p>
         <button
           onClick={onShowLogin}
           style={{
@@ -56,13 +85,66 @@ const StudentView: React.FC<StudentViewProps> = ({
     );
   }
 
+  if (isAdmin && !currentStudent) {
+    return (
+      <div style={{ padding: "15px", maxWidth: "1000px", margin: "0 auto" }}>
+        <div
+          style={{
+            background: "#EFF6FF",
+            padding: "30px",
+            borderRadius: "12px",
+            textAlign: "center",
+            border: "2px solid #3B82F6",
+          }}
+        >
+          <h2 style={{ fontSize: "20px", marginBottom: "20px" }}>
+            학생 예약 관리
+          </h2>
+          <p style={{ marginBottom: "20px", color: "#6B7280" }}>
+            예약을 조회하거나 생성할 학생을 선택하세요
+          </p>
+          <select
+            value=""
+            onChange={(e) => {
+              const student = students.find((s) => s.id === e.target.value);
+              setSelectedStudent(student || null);
+            }}
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              padding: "15px",
+              border: "2px solid #3B82F6",
+              borderRadius: "8px",
+              fontSize: "16px",
+            }}
+          >
+            <option value="">학생을 선택하세요</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.grade}학년 {s.class}반 {s.number}번 {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentStudent) {
+    return (
+      <div style={{ padding: "20px", textAlign: "center" }}>
+        <p>학생 정보를 불러올 수 없습니다.</p>
+      </div>
+    );
+  }
+
   const myReservation = reservations.find(
-    (r) => r.student_id === loggedInStudent.id && r.date === currentDate
+    (r) => r.student_id === currentStudent.id && r.date === currentDate
   );
 
   const availableSeats = seats.filter(
     (s) =>
-      s.grade === loggedInStudent.grade &&
+      s.grade === currentStudent.grade &&
       !reservations.find((r) => r.seat_id === s.id && r.date === currentDate)
   );
 
@@ -77,7 +159,7 @@ const StudentView: React.FC<StudentViewProps> = ({
         .from("reservations")
         .insert([
           {
-            student_id: loggedInStudent.id,
+            student_id: currentStudent.id,
             seat_id: selectedSeat.id,
             date: currentDate,
             status: "예약",
@@ -88,8 +170,11 @@ const StudentView: React.FC<StudentViewProps> = ({
 
       if (error) throw error;
 
-      alert("예약이 완료되었습니다!");
+      alert(`${currentStudent.name} 학생의 예약이 완료되었습니다!`);
       setSelectedSeat(null);
+      if (isAdmin) {
+        setSelectedStudent(null);
+      }
       await onDataChange();
     } catch (error) {
       console.error("예약 오류:", error);
@@ -100,7 +185,10 @@ const StudentView: React.FC<StudentViewProps> = ({
   const handleCancelReservation = async () => {
     if (!myReservation) return;
 
-    if (!window.confirm("예약을 취소하시겠습니까?")) return;
+    if (
+      !window.confirm(`${currentStudent.name} 학생의 예약을 취소하시겠습니까?`)
+    )
+      return;
 
     try {
       const { error } = await supabase
@@ -111,6 +199,9 @@ const StudentView: React.FC<StudentViewProps> = ({
       if (error) throw error;
 
       alert("예약이 취소되었습니다.");
+      if (isAdmin) {
+        setSelectedStudent(null);
+      }
       await onDataChange();
     } catch (error) {
       console.error("예약 취소 오류:", error);
@@ -122,6 +213,67 @@ const StudentView: React.FC<StudentViewProps> = ({
 
   return (
     <div style={{ padding: "15px", maxWidth: "1000px", margin: "0 auto" }}>
+      {isAdmin && (
+        <div
+          style={{
+            background: "#EFF6FF",
+            padding: "15px",
+            borderRadius: "12px",
+            marginBottom: "20px",
+            border: "2px solid #3B82F6",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <label style={{ fontWeight: "bold", minWidth: "80px" }}>
+              학생 선택:
+            </label>
+            <select
+              value={currentStudent.id}
+              onChange={(e) => {
+                const student = students.find((s) => s.id === e.target.value);
+                setSelectedStudent(student || null);
+                setSelectedSeat(null);
+              }}
+              style={{
+                flex: 1,
+                minWidth: "200px",
+                padding: "10px",
+                border: "2px solid #3B82F6",
+                borderRadius: "8px",
+                fontSize: "14px",
+              }}
+            >
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.grade}학년 {s.class}반 {s.number}번 {s.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setSelectedStudent(null)}
+              style={{
+                padding: "10px 20px",
+                background: "#6B7280",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
+            >
+              다른 학생 선택
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           background: "#EFF6FF",
@@ -137,8 +289,8 @@ const StudentView: React.FC<StudentViewProps> = ({
             marginBottom: "8px",
           }}
         >
-          {loggedInStudent.grade}학년 {loggedInStudent.class}반{" "}
-          {loggedInStudent.number}번
+          {currentStudent.grade}학년 {currentStudent.class}반{" "}
+          {currentStudent.number}번
         </h2>
         <p
           style={{
@@ -148,9 +300,9 @@ const StudentView: React.FC<StudentViewProps> = ({
             margin: 0,
           }}
         >
-          {loggedInStudent.name}
+          {currentStudent.name}
         </p>
-        {loggedInStudent.fixed_seat_id && (
+        {currentStudent.fixed_seat_id && (
           <p
             style={{
               color: "#10B981",
@@ -159,7 +311,7 @@ const StudentView: React.FC<StudentViewProps> = ({
               fontWeight: "bold",
             }}
           >
-            📌 고정 좌석: {loggedInStudent.fixed_seat_id}
+            📌 고정 좌석: {currentStudent.fixed_seat_id}
           </p>
         )}
         <p style={{ color: "#666", fontSize: "13px", marginTop: "5px" }}>
@@ -246,7 +398,7 @@ const StudentView: React.FC<StudentViewProps> = ({
             사용 가능한 좌석 ({availableSeats.length}석)
           </h3>
 
-          {loggedInStudent.fixed_seat_id && (
+          {currentStudent.fixed_seat_id && (
             <div
               style={{
                 background: "#F0FDF4",
@@ -274,7 +426,7 @@ const StudentView: React.FC<StudentViewProps> = ({
           )}
 
           <div style={{ display: "grid", gap: "15px" }}>
-            {loggedInStudent.grade === 3 && (
+            {currentStudent.grade === 3 && (
               <div
                 style={{
                   border: "2px solid #ddd",
@@ -313,19 +465,19 @@ const StudentView: React.FC<StudentViewProps> = ({
                           border:
                             selectedSeat?.id === seat.id
                               ? "3px solid #3B82F6"
-                              : seat.id === loggedInStudent.fixed_seat_id
+                              : seat.id === currentStudent.fixed_seat_id
                               ? "3px solid #10B981"
                               : "2px solid #ddd",
                           borderRadius: "8px",
                           background:
                             selectedSeat?.id === seat.id
                               ? "#3B82F6"
-                              : seat.id === loggedInStudent.fixed_seat_id
+                              : seat.id === currentStudent.fixed_seat_id
                               ? "#10B981"
                               : "white",
                           color:
                             selectedSeat?.id === seat.id ||
-                            seat.id === loggedInStudent.fixed_seat_id
+                            seat.id === currentStudent.fixed_seat_id
                               ? "white"
                               : "black",
                           cursor: "pointer",
@@ -333,14 +485,14 @@ const StudentView: React.FC<StudentViewProps> = ({
                         }}
                       >
                         {seat.number}
-                        {seat.id === loggedInStudent.fixed_seat_id && "📌"}
+                        {seat.id === currentStudent.fixed_seat_id && "📌"}
                       </button>
                     ))}
                 </div>
               </div>
             )}
 
-            {loggedInStudent.grade === 2 && (
+            {currentStudent.grade === 2 && (
               <>
                 <div
                   style={{
@@ -380,26 +532,26 @@ const StudentView: React.FC<StudentViewProps> = ({
                             border:
                               selectedSeat?.id === seat.id
                                 ? "3px solid #3B82F6"
-                                : seat.id === loggedInStudent.fixed_seat_id
+                                : seat.id === currentStudent.fixed_seat_id
                                 ? "3px solid #10B981"
                                 : "2px solid #ddd",
                             borderRadius: "8px",
                             background:
                               selectedSeat?.id === seat.id
                                 ? "#3B82F6"
-                                : seat.id === loggedInStudent.fixed_seat_id
+                                : seat.id === currentStudent.fixed_seat_id
                                 ? "#10B981"
                                 : "white",
                             color:
                               selectedSeat?.id === seat.id ||
-                              seat.id === loggedInStudent.fixed_seat_id
+                              seat.id === currentStudent.fixed_seat_id
                                 ? "white"
                                 : "black",
                             cursor: "pointer",
                           }}
                         >
                           {seat.number}
-                          {seat.id === loggedInStudent.fixed_seat_id && "📌"}
+                          {seat.id === currentStudent.fixed_seat_id && "📌"}
                         </button>
                       ))}
                   </div>
@@ -443,26 +595,26 @@ const StudentView: React.FC<StudentViewProps> = ({
                             border:
                               selectedSeat?.id === seat.id
                                 ? "3px solid #3B82F6"
-                                : seat.id === loggedInStudent.fixed_seat_id
+                                : seat.id === currentStudent.fixed_seat_id
                                 ? "3px solid #10B981"
                                 : "2px solid #ddd",
                             borderRadius: "8px",
                             background:
                               selectedSeat?.id === seat.id
                                 ? "#3B82F6"
-                                : seat.id === loggedInStudent.fixed_seat_id
+                                : seat.id === currentStudent.fixed_seat_id
                                 ? "#10B981"
                                 : "white",
                             color:
                               selectedSeat?.id === seat.id ||
-                              seat.id === loggedInStudent.fixed_seat_id
+                              seat.id === currentStudent.fixed_seat_id
                                 ? "white"
                                 : "black",
                             cursor: "pointer",
                           }}
                         >
                           {seat.number}
-                          {seat.id === loggedInStudent.fixed_seat_id && "📌"}
+                          {seat.id === currentStudent.fixed_seat_id && "📌"}
                         </button>
                       ))}
                   </div>
@@ -506,26 +658,26 @@ const StudentView: React.FC<StudentViewProps> = ({
                             border:
                               selectedSeat?.id === seat.id
                                 ? "3px solid #3B82F6"
-                                : seat.id === loggedInStudent.fixed_seat_id
+                                : seat.id === currentStudent.fixed_seat_id
                                 ? "3px solid #10B981"
                                 : "2px solid #ddd",
                             borderRadius: "8px",
                             background:
                               selectedSeat?.id === seat.id
                                 ? "#3B82F6"
-                                : seat.id === loggedInStudent.fixed_seat_id
+                                : seat.id === currentStudent.fixed_seat_id
                                 ? "#10B981"
                                 : "white",
                             color:
                               selectedSeat?.id === seat.id ||
-                              seat.id === loggedInStudent.fixed_seat_id
+                              seat.id === currentStudent.fixed_seat_id
                                 ? "white"
                                 : "black",
                             cursor: "pointer",
                           }}
                         >
                           {seat.number}
-                          {seat.id === loggedInStudent.fixed_seat_id && "📌"}
+                          {seat.id === currentStudent.fixed_seat_id && "📌"}
                         </button>
                       ))}
                   </div>
@@ -551,7 +703,7 @@ const StudentView: React.FC<StudentViewProps> = ({
               }}
             >
               {selectedSeat.type} {selectedSeat.number}번 예약하기
-              {selectedSeat.id === loggedInStudent.fixed_seat_id &&
+              {selectedSeat.id === currentStudent.fixed_seat_id &&
                 " (고정 좌석)"}
             </button>
           )}

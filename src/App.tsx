@@ -107,6 +107,22 @@ const App: React.FC = () => {
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  // 하단 날짜 표시를 실시간으로 업데이트
+  const [displayDate, setDisplayDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+
+  useEffect(() => {
+    const updateDisplayDate = () => {
+      const today = new Date().toISOString().split("T")[0];
+      setDisplayDate(today);
+    };
+
+    updateDisplayDate();
+    const interval = setInterval(updateDisplayDate, 60000); // 1분마다
+
+    return () => clearInterval(interval);
+  }, []);
 
   // 날짜 초기화
   useEffect(() => {
@@ -120,7 +136,23 @@ const App: React.FC = () => {
       loadData();
     }
   }, [currentDate]);
+  // 날짜 초기화를 매번 체크하도록 수정
+  useEffect(() => {
+    const updateDate = () => {
+      const today = new Date().toISOString().split("T")[0];
+      if (currentDate !== today) {
+        setCurrentDate(today);
+      }
+    };
 
+    // 초기 설정
+    updateDate();
+
+    // 1분마다 날짜 체크 (자정 넘어가면 자동 업데이트)
+    const interval = setInterval(updateDate, 60000);
+
+    return () => clearInterval(interval);
+  }, [currentDate]);
   const loadData = async () => {
     try {
       setLoading(true);
@@ -259,6 +291,7 @@ const App: React.FC = () => {
               >
                 대시보드
               </button>
+              {/* 키오스크 - 학생 로그인 아닐 때만 */}
               {!loggedInStudent && (
                 <button
                   onClick={() => setView("kiosk")}
@@ -276,7 +309,9 @@ const App: React.FC = () => {
                   키오스크
                 </button>
               )}
-              {loggedInStudent && (
+
+              {/* 학생 예약 - 학생 로그인 시 또는 관리자 */}
+              {(loggedInStudent || loggedInUser?.role === "admin") && (
                 <button
                   onClick={() => setView("student")}
                   style={{
@@ -290,10 +325,12 @@ const App: React.FC = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  예약
+                  {loggedInStudent ? "예약" : "학생예약"}
                 </button>
               )}
-              {loggedInUser && loggedInUser.role === "teacher" && (
+              {/* ✅ 교사 탭 - 교사 또는 관리자 */}
+              {(loggedInUser?.role === "teacher" ||
+                loggedInUser?.role === "admin") && (
                 <button
                   onClick={() => setView("teacher")}
                   style={{
@@ -310,7 +347,8 @@ const App: React.FC = () => {
                   교사
                 </button>
               )}
-              {loggedInUser && loggedInUser.role === "admin" && (
+              {/* ✅ 관리자 탭 - 관리자만 */}
+              {loggedInUser?.role === "admin" && (
                 <button
                   onClick={() => setView("admin")}
                   style={{
@@ -327,6 +365,7 @@ const App: React.FC = () => {
                   관리자
                 </button>
               )}
+              {/* ✅ 조회 탭 - 교사, 관리자, 학생 */}
               {(loggedInUser || loggedInStudent) && (
                 <button
                   onClick={() => setView("query")}
@@ -337,7 +376,6 @@ const App: React.FC = () => {
                     background: view === "query" ? "#3B82F6" : "transparent",
                     color: view === "query" ? "white" : "black",
                     cursor: "pointer",
-                    display: loggedInStudent ? "none" : "block",
                     fontSize: "13px",
                     whiteSpace: "nowrap",
                   }}
@@ -423,6 +461,7 @@ const App: React.FC = () => {
         {view === "student" && (
           <StudentView
             loggedInStudent={loggedInStudent}
+            loggedInUser={loggedInUser} // ✅ 이미 추가했어야 함
             seats={seats}
             reservations={reservations}
             currentDate={currentDate}

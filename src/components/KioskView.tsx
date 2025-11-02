@@ -565,7 +565,7 @@ const KioskView: React.FC<KioskViewProps> = ({
       setOverlay(null);
     }, 3000);
   };
-
+  // completeSeatSelection 함수 수정
   const completeSeatSelection = async (seatId: string) => {
     if (!studentForSeatSelection) return;
 
@@ -591,40 +591,34 @@ const KioskView: React.FC<KioskViewProps> = ({
       if (error) throw error;
       if (data) {
         const seat = seats.find((s) => s.id === seatId);
-        
-        // 오버레이 표시
-        showOverlay({
+
+        // ✅ 오버레이 표시 수정
+        setOverlay({
           studentName: studentForSeatSelection.name,
           seatInfo: `${seat?.type} ${seat?.number}번`,
           status: "success",
           message: "입실 완료!",
         });
 
+        // 3초 후 사라짐
+        setTimeout(() => {
+          setOverlay(null);
+          setSelectingSeat(false);
+          setStudentForSeatSelection(null);
+        }, 3000);
+
         await onDataChange();
-        setSelectingSeat(false);
-        setStudentForSeatSelection(null);
       }
     } catch (error) {
       console.error("입실 오류:", error);
-      showOverlay({
-        studentName: studentForSeatSelection?.name || "",
-        seatInfo: "",
-        status: "error",
-        message: "입실 처리에 실패했습니다",
-      });
+      alert("입실 처리에 실패했습니다.");
     }
   };
-
   const checkIn = async (barcode: string) => {
     const student = students.find((s) => s.barcode === barcode);
 
     if (!student) {
-      showOverlay({
-        studentName: "",
-        seatInfo: "",
-        status: "error",
-        message: "등록되지 않은 학생증입니다",
-      });
+      alert("등록되지 않은 학생증입니다.");
       return;
     }
 
@@ -634,13 +628,7 @@ const KioskView: React.FC<KioskViewProps> = ({
 
     if (reservation) {
       if (reservation.status === "입실완료") {
-        const seat = seats.find((s) => s.id === reservation.seat_id);
-        showOverlay({
-          studentName: student.name,
-          seatInfo: `${seat?.type} ${seat?.number}번`,
-          status: "error",
-          message: "이미 입실 처리되었습니다",
-        });
+        alert("이미 입실 처리되었습니다.");
         return;
       }
 
@@ -665,35 +653,30 @@ const KioskView: React.FC<KioskViewProps> = ({
         if (error) throw error;
         if (data) {
           const seat = seats.find((s) => s.id === reservation.seat_id);
-          
-          showOverlay({
+
+          // ✅ 성공 오버레이
+          setOverlay({
             studentName: student.name,
             seatInfo: `${seat?.type} ${seat?.number}번`,
             status: "success",
             message: "입실 완료!",
           });
 
+          setTimeout(() => setOverlay(null), 3000);
           await onDataChange();
         }
       } catch (error) {
         console.error("입실 오류:", error);
-        showOverlay({
-          studentName: student.name,
-          seatInfo: "",
-          status: "error",
-          message: "입실 처리에 실패했습니다",
-        });
+        alert("입실 처리에 실패했습니다.");
       }
     } else {
       // 예약이 없는 경우
-      // 고정 좌석 확인
       if (student.fixed_seat_id) {
         const isAvailable = !reservations.find(
           (r) => r.seat_id === student.fixed_seat_id && r.date === currentDate
         );
 
         if (isAvailable) {
-          // 고정 좌석으로 자동 입실
           try {
             const now = new Date();
             const checkInTime = `${String(now.getHours()).padStart(
@@ -719,31 +702,28 @@ const KioskView: React.FC<KioskViewProps> = ({
             if (error) throw error;
             if (data) {
               const seat = seats.find((s) => s.id === student.fixed_seat_id);
-              
-              showOverlay({
+
+              // ✅ 성공 오버레이
+              setOverlay({
                 studentName: student.name,
                 seatInfo: `${seat?.type} ${seat?.number}번 (고정좌석)`,
                 status: "success",
                 message: "입실 완료!",
               });
 
+              setTimeout(() => setOverlay(null), 3000);
               await onDataChange();
             }
             return;
           } catch (error) {
             console.error("입실 오류:", error);
-            showOverlay({
-              studentName: student.name,
-              seatInfo: "",
-              status: "error",
-              message: "입실 처리에 실패했습니다",
-            });
+            alert("입실 처리에 실패했습니다.");
             return;
           }
         }
       }
 
-      // 고정 좌석이 없거나 사용중이면 좌석 선택 화면으로
+      // 좌석 선택 화면으로
       setStudentForSeatSelection(student);
       setSelectingSeat(true);
     }
@@ -800,8 +780,9 @@ const KioskView: React.FC<KioskViewProps> = ({
               {studentForSeatSelection.name} 학생
             </h1>
             <p style={{ fontSize: "18px", color: "#6B7280" }}>
-              {studentForSeatSelection.grade}학년 {studentForSeatSelection.class}
-              반 {studentForSeatSelection.number}번
+              {studentForSeatSelection.grade}학년{" "}
+              {studentForSeatSelection.class}반 {studentForSeatSelection.number}
+              번
             </p>
           </div>
 
@@ -1254,7 +1235,8 @@ const KioskView: React.FC<KioskViewProps> = ({
             >
               <div
                 style={{
-                  background: overlay.status === "success" ? "#10B981" : "#EF4444",
+                  background:
+                    overlay.status === "success" ? "#10B981" : "#EF4444",
                   padding: "40px 60px",
                   borderRadius: "20px",
                   textAlign: "center",
@@ -1347,7 +1329,13 @@ const KioskView: React.FC<KioskViewProps> = ({
                     background: index % 2 === 0 ? "#F9FAFB" : "white",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
                     <span
                       style={{
                         fontWeight: "bold",

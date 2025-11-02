@@ -115,28 +115,13 @@ const QueryView: React.FC<QueryViewProps> = ({
           <option value={2}>2학년</option>
           <option value={3}>3학년</option>
         </select>
-        <button
-          onClick={downloadReport}
-          style={{
-            padding: "12px 20px",
-            background: "#3B82F6",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "14px",
-            flex: isMobile ? "1" : "auto",
-          }}
-        >
-          📥 다운로드
-        </button>
       </div>
 
+      {/* ✅ 4개 반 한 줄로 */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+          gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
           gap: "15px",
           marginBottom: "20px",
         }}
@@ -162,72 +147,79 @@ const QueryView: React.FC<QueryViewProps> = ({
                 {queryGrade}학년 {classNum}반
               </h3>
               <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-                {classData.map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "8px 0",
-                      borderBottom: "1px solid #E5E7EB",
-                      fontSize: "14px",
-                    }}
-                  >
-                    <span>
-                      {s.number}. {s.name}
-                      {s.fixed_seat_id && (
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            color: "#10B981",
-                            marginLeft: "5px",
-                          }}
-                        >
-                          📌{s.fixed_seat_id}
-                        </span>
-                      )}
-                    </span>
-                    <span
+                {classData.map((s) => {
+                  // ✅ 좌석 정보 가져오기
+                  let displayText = "미신청";
+                  let bgColor = "#F3F4F6";
+
+                  if (s.reservation?.status === "입실완료") {
+                    displayText = s.reservation.seat_id || "출석";
+                    bgColor = "#D1FAE5";
+                  } else if (s.reservation?.status === "예약") {
+                    displayText = "예약";
+                    bgColor = "#FEF3C7";
+                  } else if (s.reservation?.status === "미입실") {
+                    displayText = "미입실";
+                    bgColor = "#FEE2E2";
+                  } else if (s.absence) {
+                    displayText = s.absence.reason;
+                    bgColor = "#DBEAFE";
+                  }
+
+                  return (
+                    <div
+                      key={s.id}
                       style={{
-                        fontSize: "12px",
-                        padding: "3px 8px",
-                        borderRadius: "4px",
-                        fontWeight: "bold",
-                        whiteSpace: "nowrap",
-                        background:
-                          s.reservation?.status === "입실완료"
-                            ? "#D1FAE5"
-                            : s.reservation?.status === "예약"
-                            ? "#FEF3C7"
-                            : s.reservation?.status === "미입실"
-                            ? "#FEE2E2"
-                            : s.absence
-                            ? "#DBEAFE"
-                            : "#F3F4F6",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 0",
+                        borderBottom: "1px solid #E5E7EB",
+                        fontSize: "14px",
                       }}
                     >
-                      {s.reservation?.status === "입실완료"
-                        ? "출석"
-                        : s.reservation?.status === "예약"
-                        ? "예약"
-                        : s.reservation?.status === "미입실"
-                        ? "미입실"
-                        : s.absence?.reason || "미신청"}
-                    </span>
-                  </div>
-                ))}
+                      <span>
+                        {s.number}. {s.name}
+                        {s.fixed_seat_id && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "#10B981",
+                              marginLeft: "5px",
+                            }}
+                          >
+                            📌{s.fixed_seat_id}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          padding: "3px 8px",
+                          borderRadius: "4px",
+                          fontWeight: "bold",
+                          whiteSpace: "nowrap",
+                          background: bgColor,
+                        }}
+                      >
+                        {displayText}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
         })}
       </div>
 
+      {/* 통계 */}
       <div
         style={{
           background: "#F3F4F6",
           padding: "15px",
           borderRadius: "12px",
+          marginBottom: "15px",
         }}
       >
         <h3
@@ -302,6 +294,25 @@ const QueryView: React.FC<QueryViewProps> = ({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* ✅ 다운로드 버튼 아래로 */}
+      <div style={{ textAlign: "center", marginTop: "20px" }}>
+        <button
+          onClick={downloadReport}
+          style={{
+            padding: "14px 40px",
+            background: "#3B82F6",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            fontSize: "16px",
+          }}
+        >
+          📥 CSV 다운로드
+        </button>
       </div>
     </div>
   );
