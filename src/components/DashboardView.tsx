@@ -17,7 +17,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   currentDate,
 }) => {
   const isMobile = window.innerWidth < 768;
-
+  const grade1Students = students.filter((s) => s.grade === 1);
+  const grade2Students = students.filter((s) => s.grade === 2);
+  const grade3Students = students.filter((s) => s.grade === 3);
   const todayReservations = reservations.filter((r) => r.date === currentDate);
   const stats = {
     total: students.length,
@@ -26,6 +28,23 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     noShow: todayReservations.filter((r) => r.status === "미입실").length,
     absent: absences.filter((a) => a.date === currentDate).length,
   };
+
+  const grade2Seats = seats.filter((s) => s.grade === 2);
+  const grade3Seats = seats.filter((s) => s.grade === 3);
+
+  const grade2Reserved = todayReservations.filter(
+    (r) =>
+      r.seat_id &&
+      grade2Seats.find((s) => s.id === r.seat_id) &&
+      r.status === "입실완료"
+  ).length;
+
+  const grade3Reserved = todayReservations.filter(
+    (r) =>
+      r.seat_id &&
+      grade3Seats.find((s) => s.id === r.seat_id) &&
+      r.status === "입실완료"
+  ).length;
 
   return (
     <div style={{ padding: "15px" }}>
@@ -51,8 +70,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ fontSize: "12px", color: "#666" }}>전체 학생</div>
           <div style={{ fontSize: "24px", fontWeight: "bold" }}>
             {stats.total}명
+            <div
+              style={{
+                fontSize: "10px",
+                color: "#666",
+                marginTop: "8px",
+                lineHeight: "1.8",
+              }}
+            >
+              <div>
+                {grade1Students.length}명 / {grade2Students.length}명 /{" "}
+                {grade3Students.length}명
+              </div>
+            </div>
           </div>
         </div>
+
         <div
           style={{
             background: "#FEF3C7",
@@ -63,6 +96,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ fontSize: "12px", color: "#666" }}>예약</div>
           <div style={{ fontSize: "24px", fontWeight: "bold" }}>
             {stats.reserved}명
+            <div
+              style={{
+                fontSize: "10px",
+                color: "#666",
+                marginTop: "8px",
+                lineHeight: "1.8",
+              }}
+            >
+              <div>
+                {grade1Students.length}명 / {grade2Reserved}명 /{" "}
+                {grade3Reserved}명
+              </div>
+            </div>
           </div>
         </div>
         <div
@@ -75,6 +121,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ fontSize: "12px", color: "#666" }}>입실</div>
           <div style={{ fontSize: "24px", fontWeight: "bold" }}>
             {stats.checkedIn}명
+            <div
+              style={{
+                fontSize: "10px",
+                color: "#666",
+                marginTop: "8px",
+                lineHeight: "1.8",
+              }}
+            >
+              <div>
+                {grade1Students.length}명 / {grade2Reserved}명 /{" "}
+                {grade3Reserved}명
+              </div>
+            </div>
           </div>
         </div>
         <div
@@ -87,6 +146,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ fontSize: "12px", color: "#666" }}>미입실</div>
           <div style={{ fontSize: "24px", fontWeight: "bold" }}>
             {stats.noShow}명
+            <div
+              style={{
+                fontSize: "10px",
+                color: "#666",
+                marginTop: "8px",
+                lineHeight: "1.8",
+              }}
+            >
+              <div>
+                {grade2Seats.length}명 / {grade2Students.length}명 /{" "}
+                {grade3Students.length}명
+              </div>
+            </div>
           </div>
         </div>
         <div
@@ -99,6 +171,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ fontSize: "12px", color: "#666" }}>사유제출</div>
           <div style={{ fontSize: "24px", fontWeight: "bold" }}>
             {stats.absent}명
+            <div
+              style={{
+                fontSize: "10px",
+                color: "#666",
+                marginTop: "8px",
+                lineHeight: "1.8",
+              }}
+            >
+              <div>
+                {grade1Students.length}명 / {grade2Students.length}명 /{" "}
+                {grade3Students.length}명
+              </div>
+            </div>
           </div>
         </div>
       </div>

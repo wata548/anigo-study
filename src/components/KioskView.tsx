@@ -614,6 +614,112 @@ const KioskView: React.FC<KioskViewProps> = ({
       alert("입실 처리에 실패했습니다.");
     }
   };
+  const handleBarcodeCheckIn = async () => {
+    if (!barcodeInput.trim()) {
+      alert("바코드를 입력하세요.");
+      return;
+    }
+
+    try {
+      const student = students.find((s) => s.barcode === barcodeInput.trim());
+
+      if (!student) {
+        alert("등록되지 않은 바코드입니다.");
+        setBarcodeInput("");
+        return;
+      }
+
+      // ✅ 1학년 처리 (고정좌석만)
+      if (student.grade === 1) {
+        if (!student.fixed_seat_id) {
+          alert(
+            `${student.name}님은 고정 좌석이 배정되지 않았습니다.\n교사에게 문의하세요.`
+          );
+          setBarcodeInput("");
+          return;
+        }
+
+        // 기존 예약 확인
+        const existingReservation = reservations.find(
+          (r) => r.student_id === student.id && r.date === currentDate
+        );
+
+        if (existingReservation) {
+          if (existingReservation.status === "입실완료") {
+            alert(`${student.name}님은 이미 입실 처리되었습니다.`);
+            setBarcodeInput("");
+            return;
+          }
+
+          // 예약 상태를 입실완료로 변경
+          const { error } = await supabase
+            .from("reservations")
+            .update({
+              status: "입실완료",
+              check_in_time: new Date().toISOString(),
+            })
+            .eq("id", existingReservation.id);
+
+          if (error) throw error;
+        } else {
+          // 새 예약 생성
+          const { error } = await supabase.from("reservations").insert({
+            student_id: student.id,
+            seat_id: student.fixed_seat_id,
+            date: currentDate,
+            status: "입실완료",
+            check_in_time: new Date().toISOString(),
+          });
+
+          if (error) throw error;
+        }
+
+        alert(
+          `✅ ${student.name}님 입실 완료!\n좌석: ${student.fixed_seat_id}`
+        );
+        setBarcodeInput("");
+        await onDataChange();
+        return;
+      }
+
+      // ✅ 2-3학년 기존 로직
+      const todayReservation = reservations.find(
+        (r) => r.student_id === student.id && r.date === currentDate
+      );
+
+      if (!todayReservation) {
+        alert(`${student.name}님은 오늘 예약이 없습니다.`);
+        setBarcodeInput("");
+        return;
+      }
+
+      if (todayReservation.status === "입실완료") {
+        alert(`${student.name}님은 이미 입실 처리되었습니다.`);
+        setBarcodeInput("");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("reservations")
+        .update({
+          status: "입실완료",
+          check_in_time: new Date().toISOString(),
+        })
+        .eq("id", todayReservation.id);
+
+      if (error) throw error;
+
+      alert(
+        `✅ ${student.name}님 입실 완료!\n좌석: ${todayReservation.seat_id}`
+      );
+      setBarcodeInput("");
+      await onDataChange();
+    } catch (error) {
+      console.error("체크인 오류:", error);
+      alert("입실 처리에 실패했습니다.");
+      setBarcodeInput("");
+    }
+  };
   const checkIn = async (barcode: string) => {
     const student = students.find((s) => s.barcode === barcode);
 

@@ -35,6 +35,12 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
   const handleLogin = async () => {
     try {
       if (loginType === "student") {
+        // ✅ 번호 범위 체크
+        if (loginForm.number < 1 || loginForm.number > 50) {
+          alert("번호는 1-50 사이여야 합니다.");
+          return;
+        }
+
         const studentId = `${loginForm.grade}${loginForm.class}${String(
           loginForm.number
         ).padStart(2, "0")}`;
@@ -49,6 +55,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
           alert("학년, 반, 번호 또는 비밀번호가 일치하지 않습니다.");
           return;
         }
+
+        // ✅ localStorage에 저장
+        localStorage.setItem("loggedInStudent", JSON.stringify(data));
+        console.log("💾 학생 로그인 정보 저장:", data);
 
         onLoginSuccess("student", data);
         resetLoginForm();
@@ -66,6 +76,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
           alert("이메일 또는 비밀번호가 일치하지 않습니다.");
           return;
         }
+
+        // ✅ localStorage에 저장
+        localStorage.setItem("loggedInUser", JSON.stringify(data));
+        console.log("💾 사용자 로그인 정보 저장:", data);
 
         onLoginSuccess("user", data);
         resetLoginForm();
@@ -89,6 +103,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
         alert("등록되지 않은 바코드입니다.");
         return;
       }
+
+      // ✅ localStorage에 저장
+      localStorage.setItem("loggedInStudent", JSON.stringify(data));
+      console.log("💾 학생 바코드 로그인 정보 저장:", data);
 
       onLoginSuccess("student", data);
       resetLoginForm();
@@ -246,6 +264,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
                     fontSize: "14px",
                   }}
                 >
+                  <option value={1}>1학년</option>
                   <option value={2}>2학년</option>
                   <option value={3}>3학년</option>
                 </select>
@@ -271,14 +290,25 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
                 </select>
                 <input
                   type="number"
+                  min="1"
+                  max="50"
                   placeholder="번호"
                   value={loginForm.number}
-                  onChange={(e) =>
-                    setLoginForm({
-                      ...loginForm,
-                      number: Number(e.target.value),
-                    })
-                  }
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    // ✅ 0 이하 방지
+                    if (val >= 1 && val <= 50) {
+                      setLoginForm({
+                        ...loginForm,
+                        number: val,
+                      });
+                    } else if (e.target.value === "") {
+                      setLoginForm({
+                        ...loginForm,
+                        number: 1,
+                      });
+                    }
+                  }}
                   style={{
                     padding: "10px 8px",
                     border: "1px solid #ddd",
@@ -386,7 +416,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
                   boxSizing: "border-box",
                   fontSize: "14px",
                 }}
-              />{" "}
+              />
               <p
                 style={{
                   fontSize: "12px",

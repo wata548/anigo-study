@@ -54,20 +54,31 @@ const TeacherView: React.FC<TeacherViewProps> = ({
     const absence = absences.find(
       (a) => a.student_id === s.id && a.date === currentDate
     );
+
     return {
       ...s,
       reservation,
       absence,
       hasReservation: !!reservation,
-      isNoShow: reservation?.status === "미입실",
+      isNoShow: s.grade === 1 ? !reservation : reservation?.status === "미입실",
       hasAbsence: !!absence,
     };
   });
 
   const handleSaveAll = async () => {
     try {
+      const studentsToDelete = Object.entries(absenceData)
+        .filter(
+          ([studentId, data]) =>
+            data.reason === "" &&
+            absences.find(
+              (a) => a.student_id === studentId && a.date === currentDate
+            )
+        )
+        .map(([studentId]) => studentId);
+
       const newAbsences = Object.entries(absenceData)
-        .filter(([_, data]) => data.reason)
+        .filter(([_, data]) => data.reason && data.reason !== "")
         .map(([studentId, data]) => ({
           student_id: studentId,
           date: currentDate,
@@ -75,24 +86,46 @@ const TeacherView: React.FC<TeacherViewProps> = ({
           note: data.note || "",
         }));
 
-      if (newAbsences.length === 0) {
-        alert("입력된 사유가 없습니다.");
+      if (newAbsences.length === 0 && studentsToDelete.length === 0) {
+        alert("변경된 내용이 없습니다.");
         return;
       }
 
-      const studentIds = newAbsences.map((a) => a.student_id);
+      if (studentsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("absences")
+          .delete()
+          .in("student_id", studentsToDelete)
+          .eq("date", currentDate);
 
-      await supabase
-        .from("absences")
-        .delete()
-        .in("student_id", studentIds)
-        .eq("date", currentDate);
+        if (deleteError) throw deleteError;
+      }
 
-      const { error } = await supabase.from("absences").insert(newAbsences);
+      if (newAbsences.length > 0) {
+        const studentIds = newAbsences.map((a) => a.student_id);
 
-      if (error) throw error;
+        await supabase
+          .from("absences")
+          .delete()
+          .in("student_id", studentIds)
+          .eq("date", currentDate);
 
-      alert(`${newAbsences.length}명의 사유가 저장되었습니다.`);
+        const { error: insertError } = await supabase
+          .from("absences")
+          .insert(newAbsences);
+
+        if (insertError) throw insertError;
+      }
+
+      const message = [];
+      if (newAbsences.length > 0) {
+        message.push(`${newAbsences.length}명 저장`);
+      }
+      if (studentsToDelete.length > 0) {
+        message.push(`${studentsToDelete.length}명 삭제`);
+      }
+
+      alert(`✅ ${message.join(", ")}되었습니다.`);
       setAbsenceData({});
       await onDataChange();
     } catch (error) {
@@ -104,7 +137,12 @@ const TeacherView: React.FC<TeacherViewProps> = ({
   const handleNoShowCheck = async () => {
     try {
       const reservationsToUpdate = reservations
-        .filter((r) => r.date === currentDate && r.status === "예약")
+        .filter(
+          (r) =>
+            r.date === currentDate &&
+            r.status === "예약" &&
+            students.find((st) => st.id === r.student_id && st.grade !== 1)
+        )
         .map((r) => r.id);
 
       if (reservationsToUpdate.length > 0) {
@@ -129,7 +167,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
       if (studentsToAdd.length > 0) {
         const newReservations = studentsToAdd.map((s) => ({
           student_id: s.id,
-          seat_id: null,
+          seat_id: s.grade === 1 ? s.fixed_seat_id : null,
           date: currentDate,
           status: "미입실",
           check_in_time: null,
@@ -150,7 +188,6 @@ const TeacherView: React.FC<TeacherViewProps> = ({
     }
   };
 
-  // ✅ 오늘 데이터 전체 리셋
   const handleResetToday = async () => {
     if (
       !window.confirm(
@@ -161,7 +198,6 @@ const TeacherView: React.FC<TeacherViewProps> = ({
     }
 
     try {
-      // 예약 삭제
       const { error: resError } = await supabase
         .from("reservations")
         .delete()
@@ -169,7 +205,6 @@ const TeacherView: React.FC<TeacherViewProps> = ({
 
       if (resError) throw resError;
 
-      // 사유 삭제
       const { error: absError } = await supabase
         .from("absences")
         .delete()
@@ -251,11 +286,11 @@ const TeacherView: React.FC<TeacherViewProps> = ({
       alert("좌석 해제에 실패했습니다.");
     }
   };
+
   const isMobile = window.innerWidth < 768;
 
   return (
     <div style={{ padding: "15px", maxWidth: "1400px", margin: "0 auto" }}>
-      {/* ✅ 상단 제목 + 미입실 체크 + 오늘 데이터 리셋 */}
       <div
         style={{
           display: "flex",
@@ -267,7 +302,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         }}
       >
         <h1 style={{ fontSize: "20px", fontWeight: "bold", margin: 0 }}>
-          교사 관리 페이지
+          사유 입력 페이지
         </h1>
         <div style={{ display: "flex", gap: "8px" }}>
           <button
@@ -286,7 +321,6 @@ const TeacherView: React.FC<TeacherViewProps> = ({
             ⚠️ 미입실 체크
           </button>
 
-          {/* ✅ 오늘 데이터 리셋 버튼 (테스트용) */}
           {loggedInUser.role === "admin" && (
             <button
               onClick={handleResetToday}
@@ -329,6 +363,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
             flex: "1",
           }}
         >
+          <option value={1}>1학년</option>
           <option value={2}>2학년</option>
           <option value={3}>3학년</option>
         </select>
@@ -353,8 +388,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         </select>
       </div>
 
-      {/* 좌석 고정 배정 모드 */}
-      {assigningSeats && (
+      {assigningSeats ? (
         <div
           style={{
             background: "#FEF3C7",
@@ -364,12 +398,111 @@ const TeacherView: React.FC<TeacherViewProps> = ({
             border: "2px solid #F59E0B",
           }}
         >
-          {/* 기존 좌석 배정 UI 동일 */}
-        </div>
-      )}
+          <h3
+            style={{
+              fontSize: "16px",
+              fontWeight: "bold",
+              marginBottom: "15px",
+            }}
+          >
+            📌 고정 좌석 배정
+          </h3>
 
-      {/* 사유 입력 영역 */}
-      {!assigningSeats && (
+          <div style={{ marginBottom: "15px" }}>
+            {classStudents.map((s) => (
+              <div
+                key={s.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "10px",
+                  background: "white",
+                  borderRadius: "8px",
+                  marginBottom: "8px",
+                }}
+              >
+                <span style={{ fontWeight: "bold", minWidth: "100px" }}>
+                  {s.number}번 {s.name}
+                </span>
+                <select
+                  value={seatAssignments[s.id] || s.fixed_seat_id || ""}
+                  onChange={(e) =>
+                    setSeatAssignments({
+                      ...seatAssignments,
+                      [s.id]: e.target.value,
+                    })
+                  }
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                  }}
+                >
+                  <option value="">좌석 없음</option>
+                  {seats
+                    .filter((seat) => seat.grade === selectedGrade)
+                    .map((seat) => (
+                      <option key={seat.id} value={seat.id}>
+                        {seat.id}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={handleSaveSeats}
+              style={{
+                flex: 1,
+                padding: "12px",
+                background: "#10B981",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              저장
+            </button>
+            <button
+              onClick={handleClearAllSeats}
+              style={{
+                padding: "12px 20px",
+                background: "#EF4444",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              전체 해제
+            </button>
+            <button
+              onClick={() => {
+                setAssigningSeats(false);
+                setSeatAssignments({});
+              }}
+              style={{
+                padding: "12px 20px",
+                background: "#6B7280",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      ) : (
         <>
           <div
             style={{
@@ -379,15 +512,34 @@ const TeacherView: React.FC<TeacherViewProps> = ({
               marginBottom: "20px",
             }}
           >
-            <h3
+            <div
               style={{
-                fontSize: "16px",
-                fontWeight: "bold",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 marginBottom: "15px",
               }}
             >
-              {selectedGrade}학년 {selectedClass}반 ({classStudents.length}명)
-            </h3>
+              <h3 style={{ fontSize: "16px", fontWeight: "bold", margin: 0 }}>
+                {selectedGrade}학년 {selectedClass}반 ({classStudents.length}
+                명)
+              </h3>
+              <button
+                onClick={() => setAssigningSeats(true)}
+                style={{
+                  padding: "8px 16px",
+                  background: "#8B5CF6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                }}
+              >
+                📌 좌석 배정
+              </button>
+            </div>
 
             <div style={{ marginBottom: "15px" }}>
               {studentsWithStatus.map((s) => {
@@ -403,13 +555,20 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                     : "#FEF3C7";
 
                 const currentReason =
-                  absenceData[s.id]?.reason || s.absence?.reason || "";
+                  absenceData[s.id]?.reason !== undefined
+                    ? absenceData[s.id].reason
+                    : s.absence?.reason || "";
+
                 const currentNote =
-                  absenceData[s.id]?.note || s.absence?.note || "";
+                  absenceData[s.id]?.note !== undefined
+                    ? absenceData[s.id].note
+                    : s.absence?.note || "";
 
                 const canEditReason =
-                  s.reservation?.status !== "입실완료" &&
-                  s.reservation?.status !== "예약";
+                  s.grade === 1
+                    ? s.reservation?.status !== "입실완료"
+                    : s.reservation?.status !== "입실완료" &&
+                      s.reservation?.status !== "예약";
 
                 return (
                   <div
@@ -469,59 +628,112 @@ const TeacherView: React.FC<TeacherViewProps> = ({
 
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile
-                          ? "repeat(2, 1fr)"
-                          : "repeat(4, 1fr)",
-                        gap: "6px",
-                        flex: "1",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        flex: 1,
                       }}
                     >
-                      {["기숙사", "교내", "교외", "기타"].map((reason) => (
-                        <button
-                          key={reason}
-                          onClick={() => {
-                            if (!canEditReason) return;
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: isMobile
+                            ? "repeat(2, 1fr)"
+                            : "repeat(4, 1fr)",
+                          gap: "6px",
+                          flex: "1",
+                        }}
+                      >
+                        {["기숙사", "교내", "교외", "기타"].map((reason) => (
+                          <button
+                            key={reason}
+                            onClick={() => {
+                              if (!canEditReason) return;
 
-                            if (currentReason === reason) {
-                              const newData = { ...absenceData };
-                              delete newData[s.id];
-                              setAbsenceData(newData);
-                            } else {
+                              console.log(
+                                "클릭:",
+                                reason,
+                                "현재:",
+                                currentReason
+                              );
+
+                              if (currentReason === reason) {
+                                setAbsenceData({
+                                  ...absenceData,
+                                  [s.id]: {
+                                    reason: "",
+                                    note: "",
+                                  },
+                                });
+                              } else {
+                                setAbsenceData({
+                                  ...absenceData,
+                                  [s.id]: {
+                                    reason,
+                                    note: currentNote,
+                                  },
+                                });
+                              }
+                            }}
+                            disabled={!canEditReason}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: "6px",
+                              fontSize: "13px",
+                              border:
+                                currentReason === reason
+                                  ? "2px solid #3B82F6"
+                                  : "1px solid #ddd",
+                              background:
+                                currentReason === reason ? "#3B82F6" : "white",
+                              color:
+                                currentReason === reason
+                                  ? "white"
+                                  : canEditReason
+                                  ? "black"
+                                  : "#ccc",
+                              cursor: canEditReason ? "pointer" : "not-allowed",
+                              fontWeight: "normal",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {reason}
+                          </button>
+                        ))}
+                      </div>
+
+                      {currentReason &&
+                        currentReason !== "" &&
+                        canEditReason && (
+                          <button
+                            onClick={() => {
+                              console.log("X 버튼 클릭:", s.name);
                               setAbsenceData({
                                 ...absenceData,
                                 [s.id]: {
-                                  reason,
-                                  note: currentNote,
+                                  reason: "",
+                                  note: "",
                                 },
                               });
-                            }
-                          }}
-                          disabled={!canEditReason}
-                          style={{
-                            padding: "8px 12px",
-                            borderRadius: "6px",
-                            fontSize: "13px",
-                            border:
-                              currentReason === reason
-                                ? "none"
-                                : "1px solid #ddd",
-                            background:
-                              currentReason === reason ? "#3B82F6" : "white",
-                            color:
-                              currentReason === reason
-                                ? "white"
-                                : canEditReason
-                                ? "black"
-                                : "#ccc",
-                            cursor: canEditReason ? "pointer" : "not-allowed",
-                            fontWeight:
-                              currentReason === reason ? "bold" : "normal",
-                          }}
-                        >
-                          {reason}
-                        </button>
-                      ))}
+                            }}
+                            style={{
+                              padding: "8px 12px",
+                              background: "#EF4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              fontSize: "13px",
+                              cursor: "pointer",
+                              fontWeight: "normal",
+                              minWidth: "40px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        )}
                     </div>
 
                     <input
@@ -580,8 +792,9 @@ const TeacherView: React.FC<TeacherViewProps> = ({
             >
               일괄 저장 (
               {
-                Object.keys(absenceData).filter((k) => absenceData[k]?.reason)
-                  .length
+                Object.keys(absenceData).filter(
+                  (k) => absenceData[k]?.reason !== undefined
+                ).length
               }
               건)
             </button>

@@ -885,7 +885,7 @@ const AdminView: React.FC<AdminViewProps> = ({
                 fontSize: "14px",
               }}
             >
-              📅 전년도 삭제
+              📅 작화 데이터 삭제
             </button>
             <button
               onClick={() => setShowDeleteAllConfirm(true)}

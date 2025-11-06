@@ -1,11 +1,14 @@
 import React, { useState } from "react";
-import { Student, Reservation, Absence } from "../App";
+import { supabase } from "../supabaseClient";
+import { Student, Reservation, Absence, User } from "../App";
 
 interface QueryViewProps {
   students: Student[];
   reservations: Reservation[];
   absences: Absence[];
   currentDate: string;
+  loggedInUser: User | null;
+  onDataChange: () => void;
 }
 
 const QueryView: React.FC<QueryViewProps> = ({
@@ -13,9 +16,12 @@ const QueryView: React.FC<QueryViewProps> = ({
   reservations,
   absences,
   currentDate,
+  loggedInUser,
+  onDataChange,
 }) => {
   const [queryDate, setQueryDate] = useState(currentDate);
   const [queryGrade, setQueryGrade] = useState(2);
+  const [processingNoShow, setProcessingNoShow] = useState(false);
 
   const gradeStudents = students.filter((s) => s.grade === queryGrade);
   const dateReservations = reservations.filter((r) => r.date === queryDate);
@@ -31,8 +37,13 @@ const QueryView: React.FC<QueryViewProps> = ({
     total: gradeStudents.length,
     checkedIn: dateData.filter((s) => s.reservation?.status === "입실완료")
       .length,
-    reserved: dateData.filter((s) => s.reservation?.status === "예약").length,
-    noShow: dateData.filter((s) => s.reservation?.status === "미입실").length,
+    reserved: dateData.filter(
+      (s) => s.reservation?.status === "예약" && s.grade !== 1
+    ).length,
+    noShow: dateData.filter(
+      (s) =>
+        s.reservation?.status === "미입실" || (s.grade === 1 && !s.reservation)
+    ).length,
     absent: dateData.filter((s) => s.absence).length,
   };
 
@@ -70,15 +81,115 @@ const QueryView: React.FC<QueryViewProps> = ({
     alert("출결 보고서가 다운로드되었습니다.");
   };
 
+  const handleNoShowCheck = async () => {
+    if (
+      !loggedInUser ||
+      (loggedInUser.role !== "teacher" && loggedInUser.role !== "admin")
+    ) {
+      alert("교사 또는 관리자 권한이 필요합니다.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `${queryDate}의 예약 상태를 미입실로 일괄 변경하시겠습니까?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setProcessingNoShow(true);
+
+      const reservationsToUpdate = dateReservations
+        .filter((r) => r.status === "예약")
+        .map((r) => r.id);
+
+      if (reservationsToUpdate.length > 0) {
+        const { error: updateError } = await supabase
+          .from("reservations")
+          .update({ status: "미입실" })
+          .in("id", reservationsToUpdate);
+
+        if (updateError) throw updateError;
+      }
+
+      const studentsToAdd = gradeStudents.filter((s) => {
+        const hasReservation = dateReservations.find(
+          (r) => r.student_id === s.id
+        );
+        const hasAbsence = dateAbsences.find((a) => a.student_id === s.id);
+        return !hasReservation && !hasAbsence;
+      });
+
+      if (studentsToAdd.length > 0) {
+        const newReservations = studentsToAdd.map((s) => ({
+          student_id: s.id,
+          seat_id: s.grade === 1 ? s.fixed_seat_id : null,
+          date: queryDate,
+          status: "미입실",
+          check_in_time: null,
+        }));
+
+        const { error: insertError } = await supabase
+          .from("reservations")
+          .insert(newReservations);
+
+        if (insertError) throw insertError;
+      }
+
+      alert(
+        `✅ 미입실 체크가 완료되었습니다.\n변경: ${reservationsToUpdate.length}건\n추가: ${studentsToAdd.length}건`
+      );
+      await onDataChange();
+    } catch (error) {
+      console.error("미입실 체크 오류:", error);
+      alert("미입실 체크에 실패했습니다.");
+    } finally {
+      setProcessingNoShow(false);
+    }
+  };
+
   const isMobile = window.innerWidth < 768;
+  const isTeacherOrAdmin =
+    loggedInUser &&
+    (loggedInUser.role === "teacher" || loggedInUser.role === "admin");
 
   return (
     <div style={{ padding: "15px", maxWidth: "1400px", margin: "0 auto" }}>
-      <h1
-        style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "20px" }}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "10px",
+        }}
       >
-        출결 조회
-      </h1>
+        <h1 style={{ fontSize: "20px", fontWeight: "bold", margin: 0 }}>
+          출결 조회
+        </h1>
+
+        {isTeacherOrAdmin && (
+          <button
+            onClick={handleNoShowCheck}
+            disabled={processingNoShow}
+            style={{
+              padding: "10px 20px",
+              background: processingNoShow ? "#9CA3AF" : "#EF4444",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: "bold",
+              cursor: processingNoShow ? "not-allowed" : "pointer",
+              fontSize: "14px",
+            }}
+          >
+            {processingNoShow ? "처리중..." : "⚠️ 미입실 체크"}
+          </button>
+        )}
+      </div>
 
       <div
         style={{
@@ -112,12 +223,12 @@ const QueryView: React.FC<QueryViewProps> = ({
             flex: isMobile ? "1" : "auto",
           }}
         >
+          <option value={1}>1학년</option>
           <option value={2}>2학년</option>
           <option value={3}>3학년</option>
         </select>
       </div>
 
-      {/* ✅ 4개 반 한 줄로 */}
       <div
         style={{
           display: "grid",
@@ -148,7 +259,6 @@ const QueryView: React.FC<QueryViewProps> = ({
               </h3>
               <div style={{ maxHeight: "300px", overflowY: "auto" }}>
                 {classData.map((s) => {
-                  // ✅ 좌석 정보 가져오기
                   let displayText = "미신청";
                   let bgColor = "#F3F4F6";
 
@@ -164,6 +274,9 @@ const QueryView: React.FC<QueryViewProps> = ({
                   } else if (s.absence) {
                     displayText = s.absence.reason;
                     bgColor = "#DBEAFE";
+                  } else if (s.grade === 1) {
+                    displayText = "미입실";
+                    bgColor = "#FEE2E2";
                   }
 
                   return (
@@ -213,7 +326,6 @@ const QueryView: React.FC<QueryViewProps> = ({
         })}
       </div>
 
-      {/* 통계 */}
       <div
         style={{
           background: "#F3F4F6",
@@ -296,7 +408,6 @@ const QueryView: React.FC<QueryViewProps> = ({
         </div>
       </div>
 
-      {/* ✅ 다운로드 버튼 아래로 */}
       <div style={{ textAlign: "center", marginTop: "20px" }}>
         <button
           onClick={downloadReport}

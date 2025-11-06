@@ -112,6 +112,36 @@ const App: React.FC = () => {
     new Date().toISOString().split("T")[0]
   );
 
+  // ✅ 새로고침 시 로그인 복구
+  useEffect(() => {
+    console.log("🔍 로그인 정보 복구 시도...");
+
+    const savedStudent = localStorage.getItem("loggedInStudent");
+    const savedUser = localStorage.getItem("loggedInUser");
+
+    if (savedStudent) {
+      try {
+        const student = JSON.parse(savedStudent);
+        console.log("✅ 학생 로그인 복구:", student);
+        setLoggedInStudent(student);
+      } catch (error) {
+        console.error("❌ 학생 로그인 복구 오류:", error);
+        localStorage.removeItem("loggedInStudent");
+      }
+    }
+
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        console.log("✅ 사용자 로그인 복구:", user);
+        setLoggedInUser(user);
+      } catch (error) {
+        console.error("❌ 사용자 로그인 복구 오류:", error);
+        localStorage.removeItem("loggedInUser");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const updateDisplayDate = () => {
       const today = new Date().toISOString().split("T")[0];
@@ -136,6 +166,7 @@ const App: React.FC = () => {
       loadData();
     }
   }, [currentDate]);
+
   // 날짜 초기화를 매번 체크하도록 수정
   useEffect(() => {
     const updateDate = () => {
@@ -153,6 +184,7 @@ const App: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [currentDate]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -189,9 +221,17 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    console.log("🚪 로그아웃...");
+
+    // ✅ localStorage 정리
+    localStorage.removeItem("loggedInStudent");
+    localStorage.removeItem("loggedInUser");
+
     setLoggedInStudent(null);
     setLoggedInUser(null);
     setView("dashboard");
+
+    console.log("✅ 로그아웃 완료");
     alert("로그아웃되었습니다.");
   };
 
@@ -344,7 +384,25 @@ const App: React.FC = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  교사
+                  사유입력
+                </button>
+              )}
+              {/* ✅ 조회 탭 - 교사, 관리자만 (학생 제외) */}
+              {loggedInUser && (
+                <button
+                  onClick={() => setView("query")}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: view === "query" ? "#3B82F6" : "transparent",
+                    color: view === "query" ? "white" : "black",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  조회
                 </button>
               )}
               {/* ✅ 관리자 탭 - 관리자만 */}
@@ -362,25 +420,7 @@ const App: React.FC = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  관리자
-                </button>
-              )}
-              {/* ✅ 조회 탭 - 교사, 관리자, 학생 */}
-              {(loggedInUser || loggedInStudent) && (
-                <button
-                  onClick={() => setView("query")}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    border: "none",
-                    background: view === "query" ? "#3B82F6" : "transparent",
-                    color: view === "query" ? "white" : "black",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  조회
+                  ADMIN
                 </button>
               )}
             </div>
@@ -461,7 +501,7 @@ const App: React.FC = () => {
         {view === "student" && (
           <StudentView
             loggedInStudent={loggedInStudent}
-            loggedInUser={loggedInUser} // ✅ 이미 추가했어야 함
+            loggedInUser={loggedInUser}
             seats={seats}
             reservations={reservations}
             currentDate={currentDate}
@@ -494,6 +534,8 @@ const App: React.FC = () => {
             reservations={reservations}
             absences={absences}
             currentDate={currentDate}
+            loggedInUser={loggedInUser}
+            onDataChange={loadData}
           />
         )}
       </div>
