@@ -7,6 +7,7 @@ import DashboardView from "./components/DashboardView";
 import KioskView from "./components/KioskView";
 import QueryView from "./components/QueryView";
 import LoginView from "./components/LoginView";
+import StudentPasswordChange from "./components/StudentPasswordChange";
 import "./styles.css";
 
 // 타입 정의
@@ -35,6 +36,7 @@ export interface Seat {
   number: number;
   grade: number;
   group: string;
+  student_id?: string | null;
 }
 
 export interface Reservation {
@@ -107,12 +109,10 @@ const App: React.FC = () => {
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
-  // 하단 날짜 표시를 실시간으로 업데이트
   const [displayDate, setDisplayDate] = useState(
     new Date().toISOString().split("T")[0]
   );
 
-  // ✅ 새로고침 시 로그인 복구
   useEffect(() => {
     console.log("🔍 로그인 정보 복구 시도...");
 
@@ -149,25 +149,22 @@ const App: React.FC = () => {
     };
 
     updateDisplayDate();
-    const interval = setInterval(updateDisplayDate, 60000); // 1분마다
+    const interval = setInterval(updateDisplayDate, 60000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // 날짜 초기화
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
     setCurrentDate(today);
   }, []);
 
-  // 날짜가 설정된 후 데이터 로드
   useEffect(() => {
     if (currentDate) {
       loadData();
     }
   }, [currentDate]);
 
-  // 날짜 초기화를 매번 체크하도록 수정
   useEffect(() => {
     const updateDate = () => {
       const today = new Date().toISOString().split("T")[0];
@@ -176,10 +173,7 @@ const App: React.FC = () => {
       }
     };
 
-    // 초기 설정
     updateDate();
-
-    // 1분마다 날짜 체크 (자정 넘어가면 자동 업데이트)
     const interval = setInterval(updateDate, 60000);
 
     return () => clearInterval(interval);
@@ -223,7 +217,6 @@ const App: React.FC = () => {
   const handleLogout = () => {
     console.log("🚪 로그아웃...");
 
-    // ✅ localStorage 정리
     localStorage.removeItem("loggedInStudent");
     localStorage.removeItem("loggedInUser");
 
@@ -331,7 +324,7 @@ const App: React.FC = () => {
               >
                 대시보드
               </button>
-              {/* 키오스크 - 학생 로그인 아닐 때만 */}
+
               {!loggedInStudent && (
                 <button
                   onClick={() => setView("kiosk")}
@@ -350,7 +343,6 @@ const App: React.FC = () => {
                 </button>
               )}
 
-              {/* 학생 예약 - 학생 로그인 시 또는 관리자 */}
               {(loggedInStudent || loggedInUser?.role === "admin") && (
                 <button
                   onClick={() => setView("student")}
@@ -368,7 +360,26 @@ const App: React.FC = () => {
                   {loggedInStudent ? "예약" : "학생예약"}
                 </button>
               )}
-              {/* ✅ 교사 탭 - 교사 또는 관리자 */}
+
+              {/* 🔐 비밀번호 변경 - 학생 로그인 시에만 */}
+              {loggedInStudent && (
+                <button
+                  onClick={() => setView("password")}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: view === "password" ? "#3B82F6" : "transparent",
+                    color: view === "password" ? "white" : "black",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  비밀번호
+                </button>
+              )}
+
               {(loggedInUser?.role === "teacher" ||
                 loggedInUser?.role === "admin") && (
                 <button
@@ -387,7 +398,7 @@ const App: React.FC = () => {
                   사유입력
                 </button>
               )}
-              {/* ✅ 조회 탭 - 교사, 관리자만 (학생 제외) */}
+
               {loggedInUser && (
                 <button
                   onClick={() => setView("query")}
@@ -405,7 +416,7 @@ const App: React.FC = () => {
                   조회
                 </button>
               )}
-              {/* ✅ 관리자 탭 - 관리자만 */}
+
               {loggedInUser?.role === "admin" && (
                 <button
                   onClick={() => setView("admin")}
@@ -508,6 +519,10 @@ const App: React.FC = () => {
             onDataChange={loadData}
             onShowLogin={() => setShowLogin(true)}
           />
+        )}
+        {/* 🔐 비밀번호 변경 화면 */}
+        {view === "password" && (
+          <StudentPasswordChange loggedInStudent={loggedInStudent} />
         )}
         {view === "teacher" && (
           <TeacherView

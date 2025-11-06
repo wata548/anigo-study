@@ -17,34 +17,74 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   currentDate,
 }) => {
   const isMobile = window.innerWidth < 768;
+
+  // 학년별 학생 수
   const grade1Students = students.filter((s) => s.grade === 1);
   const grade2Students = students.filter((s) => s.grade === 2);
   const grade3Students = students.filter((s) => s.grade === 3);
+
+  // 오늘 예약 데이터
   const todayReservations = reservations.filter((r) => r.date === currentDate);
+  const todayAbsences = absences.filter((a) => a.date === currentDate);
+
+  // 학년별 학생 ID 추출 함수
+  const getGradeStudentIds = (grade: number) => {
+    return students.filter((s) => s.grade === grade).map((s) => s.id);
+  };
+
+  const grade1StudentIds = getGradeStudentIds(1);
+  const grade2StudentIds = getGradeStudentIds(2);
+  const grade3StudentIds = getGradeStudentIds(3);
+
+  // 학년별 통계 계산
+  const grade1Reserved = todayReservations.filter(
+    (r) => grade1StudentIds.includes(r.student_id) && r.status === "예약"
+  ).length;
+  const grade2Reserved = todayReservations.filter(
+    (r) => grade2StudentIds.includes(r.student_id) && r.status === "예약"
+  ).length;
+  const grade3Reserved = todayReservations.filter(
+    (r) => grade3StudentIds.includes(r.student_id) && r.status === "예약"
+  ).length;
+
+  const grade1CheckedIn = todayReservations.filter(
+    (r) => grade1StudentIds.includes(r.student_id) && r.status === "입실완료"
+  ).length;
+  const grade2CheckedIn = todayReservations.filter(
+    (r) => grade2StudentIds.includes(r.student_id) && r.status === "입실완료"
+  ).length;
+  const grade3CheckedIn = todayReservations.filter(
+    (r) => grade3StudentIds.includes(r.student_id) && r.status === "입실완료"
+  ).length;
+
+  const grade1NoShow = todayReservations.filter(
+    (r) => grade1StudentIds.includes(r.student_id) && r.status === "미입실"
+  ).length;
+  const grade2NoShow = todayReservations.filter(
+    (r) => grade2StudentIds.includes(r.student_id) && r.status === "미입실"
+  ).length;
+  const grade3NoShow = todayReservations.filter(
+    (r) => grade3StudentIds.includes(r.student_id) && r.status === "미입실"
+  ).length;
+
+  const grade1Absent = todayAbsences.filter((a) =>
+    grade1StudentIds.includes(a.student_id)
+  ).length;
+  const grade2Absent = todayAbsences.filter((a) =>
+    grade2StudentIds.includes(a.student_id)
+  ).length;
+  const grade3Absent = todayAbsences.filter((a) =>
+    grade3StudentIds.includes(a.student_id)
+  ).length;
+
+  // 전체 통계
   const stats = {
     total: students.length,
     reserved: todayReservations.filter((r) => r.status === "예약").length,
     checkedIn: todayReservations.filter((r) => r.status === "입실완료").length,
     noShow: todayReservations.filter((r) => r.status === "미입실").length,
-    absent: absences.filter((a) => a.date === currentDate).length,
+    absent: todayAbsences.length,
   };
-
-  const grade2Seats = seats.filter((s) => s.grade === 2);
-  const grade3Seats = seats.filter((s) => s.grade === 3);
-
-  const grade2Reserved = todayReservations.filter(
-    (r) =>
-      r.seat_id &&
-      grade2Seats.find((s) => s.id === r.seat_id) &&
-      r.status === "입실완료"
-  ).length;
-
-  const grade3Reserved = todayReservations.filter(
-    (r) =>
-      r.seat_id &&
-      grade3Seats.find((s) => s.id === r.seat_id) &&
-      r.status === "입실완료"
-  ).length;
 
   return (
     <div style={{ padding: "15px" }}>
@@ -79,8 +119,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               }}
             >
               <div>
-                {grade1Students.length}명 / {grade2Students.length}명 /{" "}
-                {grade3Students.length}명
+                1학년: {grade1Students.length}명 / 2학년:{" "}
+                {grade2Students.length}명 / 3학년: {grade3Students.length}명
               </div>
             </div>
           </div>
@@ -105,12 +145,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               }}
             >
               <div>
-                {grade1Students.length}명 / {grade2Reserved}명 /{" "}
+                1학년: {grade1Reserved}명 / 2학년: {grade2Reserved}명 / 3학년:{" "}
                 {grade3Reserved}명
               </div>
             </div>
           </div>
         </div>
+
         <div
           style={{
             background: "#D1FAE5",
@@ -130,12 +171,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               }}
             >
               <div>
-                {grade1Students.length}명 / {grade2Reserved}명 /{" "}
-                {grade3Reserved}명
+                1학년: {grade1CheckedIn}명 / 2학년: {grade2CheckedIn}명 / 3학년:{" "}
+                {grade3CheckedIn}명
               </div>
             </div>
           </div>
         </div>
+
         <div
           style={{
             background: "#FEE2E2",
@@ -155,12 +197,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               }}
             >
               <div>
-                {grade2Seats.length}명 / {grade2Students.length}명 /{" "}
-                {grade3Students.length}명
+                1학년: {grade1NoShow}명 / 2학년: {grade2NoShow}명 / 3학년:{" "}
+                {grade3NoShow}명
               </div>
             </div>
           </div>
         </div>
+
         <div
           style={{
             background: "#F3F4F6",
@@ -180,8 +223,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               }}
             >
               <div>
-                {grade1Students.length}명 / {grade2Students.length}명 /{" "}
-                {grade3Students.length}명
+                1학년: {grade1Absent}명 / 2학년: {grade2Absent}명 / 3학년:{" "}
+                {grade3Absent}명
               </div>
             </div>
           </div>
