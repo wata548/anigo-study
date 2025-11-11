@@ -44,15 +44,15 @@ const TeacherView: React.FC<TeacherViewProps> = ({
   }
 
   const classStudents = students.filter(
-    (s) => s.grade === selectedGrade && s.class === selectedClass
+    (s: Student) => s.grade === selectedGrade && s.class === selectedClass
   );
 
-  const studentsWithStatus = classStudents.map((s) => {
+  const studentsWithStatus = classStudents.map((s: Student) => {
     const reservation = reservations.find(
-      (r) => r.student_id === s.id && r.date === currentDate
+      (r: Reservation) => r.student_id === s.id && r.date === currentDate
     );
     const absence = absences.find(
-      (a) => a.student_id === s.id && a.date === currentDate
+      (a: Absence) => a.student_id === s.id && a.date === currentDate
     );
 
     return {
@@ -72,7 +72,8 @@ const TeacherView: React.FC<TeacherViewProps> = ({
           ([studentId, data]) =>
             data.reason === "" &&
             absences.find(
-              (a) => a.student_id === studentId && a.date === currentDate
+              (a: Absence) =>
+                a.student_id === studentId && a.date === currentDate
             )
         )
         .map(([studentId]) => studentId);
@@ -138,12 +139,14 @@ const TeacherView: React.FC<TeacherViewProps> = ({
     try {
       const reservationsToUpdate = reservations
         .filter(
-          (r) =>
+          (r: Reservation) =>
             r.date === currentDate &&
             r.status === "예약" &&
-            students.find((st) => st.id === r.student_id && st.grade !== 1)
+            students.find(
+              (st: Student) => st.id === r.student_id && st.grade !== 1
+            )
         )
-        .map((r) => r.id);
+        .map((r: Reservation) => r.id);
 
       if (reservationsToUpdate.length > 0) {
         const { error: updateError } = await supabase
@@ -154,18 +157,18 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         if (updateError) throw updateError;
       }
 
-      const studentsToAdd = classStudents.filter((s) => {
+      const studentsToAdd = classStudents.filter((s: Student) => {
         const hasReservation = reservations.find(
-          (r) => r.student_id === s.id && r.date === currentDate
+          (r: Reservation) => r.student_id === s.id && r.date === currentDate
         );
         const hasAbsence = absences.find(
-          (a) => a.student_id === s.id && a.date === currentDate
+          (a: Absence) => a.student_id === s.id && a.date === currentDate
         );
         return !hasReservation && !hasAbsence;
       });
 
       if (studentsToAdd.length > 0) {
-        const newReservations = studentsToAdd.map((s) => ({
+        const newReservations = studentsToAdd.map((s: Student) => ({
           student_id: s.id,
           seat_id: s.grade === 1 ? s.fixed_seat_id : null,
           date: currentDate,
@@ -351,7 +354,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
       >
         <select
           value={selectedGrade}
-          onChange={(e) => {
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
             setSelectedGrade(Number(e.target.value));
             setSeatAssignments({});
           }}
@@ -369,7 +372,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         </select>
         <select
           value={selectedClass}
-          onChange={(e) => {
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
             setSelectedClass(Number(e.target.value));
             setSeatAssignments({});
           }}
@@ -409,7 +412,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
           </h3>
 
           <div style={{ marginBottom: "15px" }}>
-            {classStudents.map((s) => (
+            {classStudents.map((s: Student) => (
               <div
                 key={s.id}
                 style={{
@@ -427,7 +430,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                 </span>
                 <select
                   value={seatAssignments[s.id] || s.fixed_seat_id || ""}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                     setSeatAssignments({
                       ...seatAssignments,
                       [s.id]: e.target.value,
@@ -442,8 +445,8 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                 >
                   <option value="">좌석 없음</option>
                   {seats
-                    .filter((seat) => seat.grade === selectedGrade)
-                    .map((seat) => (
+                    .filter((seat: Seat) => seat.grade === selectedGrade)
+                    .map((seat: Seat) => (
                       <option key={seat.id} value={seat.id}>
                         {seat.id}
                       </option>
@@ -650,13 +653,6 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                             onClick={() => {
                               if (!canEditReason) return;
 
-                              console.log(
-                                "클릭:",
-                                reason,
-                                "현재:",
-                                currentReason
-                              );
-
                               if (currentReason === reason) {
                                 setAbsenceData({
                                   ...absenceData,
@@ -709,7 +705,6 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                         canEditReason && (
                           <button
                             onClick={() => {
-                              console.log("X 버튼 클릭:", s.name);
                               setAbsenceData({
                                 ...absenceData,
                                 [s.id]: {
@@ -739,7 +734,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                     <input
                       type="text"
                       value={currentNote}
-                      onChange={(e) => {
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         if (!canEditReason) return;
                         setAbsenceData({
                           ...absenceData,
