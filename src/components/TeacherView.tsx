@@ -92,6 +92,22 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         return;
       }
 
+      // ✅ 퇴사 처리: 사유가 "퇴사"인 학생들의 is_withdrawn 업데이트
+      const withdrawnStudents = newAbsences
+        .filter((a) => a.reason === "퇴사")
+        .map((a) => a.student_id);
+
+      if (withdrawnStudents.length > 0) {
+        for (const studentId of withdrawnStudents) {
+          const { error: withdrawError } = await supabase
+            .from("students")
+            .update({ is_withdrawn: true })
+            .eq("id", studentId);
+
+          if (withdrawError) throw withdrawError;
+        }
+      }
+
       if (studentsToDelete.length > 0) {
         const { error: deleteError } = await supabase
           .from("absences")
@@ -121,6 +137,9 @@ const TeacherView: React.FC<TeacherViewProps> = ({
       const message = [];
       if (newAbsences.length > 0) {
         message.push(`${newAbsences.length}명 저장`);
+      }
+      if (withdrawnStudents.length > 0) {
+        message.push(`${withdrawnStudents.length}명 퇴사 처리`);
       }
       if (studentsToDelete.length > 0) {
         message.push(`${studentsToDelete.length}명 삭제`);
@@ -546,32 +565,41 @@ const TeacherView: React.FC<TeacherViewProps> = ({
 
             <div style={{ marginBottom: "15px" }}>
               {studentsWithStatus.map((s) => {
-                const bgColor =
-                  s.reservation?.status === "입실완료"
-                    ? "#D1FAE5"
-                    : s.isNoShow
-                    ? "#FEE2E2"
-                    : !s.hasReservation && !s.hasAbsence
-                    ? "#FED7AA"
-                    : s.hasAbsence
-                    ? "#DBEAFE"
-                    : "#FEF3C7";
+                // ✅ 퇴사 학생은 회색 배경
+                const bgColor = s.is_withdrawn
+                  ? "#F3F4F6"
+                  : s.reservation?.status === "입실완료"
+                  ? "#D1FAE5"
+                  : s.isNoShow
+                  ? "#FEE2E2"
+                  : !s.hasReservation && !s.hasAbsence
+                  ? "#FED7AA"
+                  : s.hasAbsence
+                  ? "#DBEAFE"
+                  : "#FEF3C7";
 
+                // ✅ 퇴사 학생은 자동으로 "퇴사" 사유 표시
                 const currentReason =
                   absenceData[s.id]?.reason !== undefined
                     ? absenceData[s.id].reason
+                    : s.is_withdrawn
+                    ? "퇴사"
                     : s.absence?.reason || "";
 
                 const currentNote =
                   absenceData[s.id]?.note !== undefined
                     ? absenceData[s.id].note
+                    : s.is_withdrawn
+                    ? "퇴사 처리됨"
                     : s.absence?.note || "";
 
-                const canEditReason =
-                  s.grade === 1
-                    ? s.reservation?.status !== "입실완료"
-                    : s.reservation?.status !== "입실완료" &&
-                      s.reservation?.status !== "예약";
+                // ✅ 퇴사 학생은 수정 불가
+                const canEditReason = s.is_withdrawn
+                  ? false
+                  : s.grade === 1
+                  ? s.reservation?.status !== "입실완료"
+                  : s.reservation?.status !== "입실완료" &&
+                    s.reservation?.status !== "예약";
 
                 return (
                   <div
@@ -598,7 +626,22 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                     >
                       <span style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {s.number}번 {s.name}
-                        {s.fixed_seat_id && (
+                        {s.is_withdrawn && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "#EF4444",
+                              marginLeft: "5px",
+                              background: "#FEE2E2",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            퇴사
+                          </span>
+                        )}
+                        {s.fixed_seat_id && !s.is_withdrawn && (
                           <span
                             style={{
                               fontSize: "11px",
@@ -619,7 +662,9 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {s.reservation?.status === "입실완료"
+                        {s.is_withdrawn
+                          ? "🚫 퇴사"
+                          : s.reservation?.status === "입실완료"
                           ? "✓ 입실"
                           : s.isNoShow
                           ? "⚠ 미입실"
@@ -642,62 +687,68 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                           display: "grid",
                           gridTemplateColumns: isMobile
                             ? "repeat(2, 1fr)"
-                            : "repeat(4, 1fr)",
+                            : "repeat(5, 1fr)",
                           gap: "6px",
                           flex: "1",
                         }}
                       >
-                        {["기숙사", "교내", "교외", "기타"].map((reason) => (
-                          <button
-                            key={reason}
-                            onClick={() => {
-                              if (!canEditReason) return;
+                        {["기숙사", "교내", "교외", "퇴사", "기타"].map(
+                          (reason) => (
+                            <button
+                              key={reason}
+                              onClick={() => {
+                                if (!canEditReason) return;
 
-                              if (currentReason === reason) {
-                                setAbsenceData({
-                                  ...absenceData,
-                                  [s.id]: {
-                                    reason: "",
-                                    note: "",
-                                  },
-                                });
-                              } else {
-                                setAbsenceData({
-                                  ...absenceData,
-                                  [s.id]: {
-                                    reason,
-                                    note: currentNote,
-                                  },
-                                });
-                              }
-                            }}
-                            disabled={!canEditReason}
-                            style={{
-                              padding: "8px 12px",
-                              borderRadius: "6px",
-                              fontSize: "13px",
-                              border:
-                                currentReason === reason
-                                  ? "2px solid #3B82F6"
-                                  : "1px solid #ddd",
-                              background:
-                                currentReason === reason ? "#3B82F6" : "white",
-                              color:
-                                currentReason === reason
-                                  ? "white"
-                                  : canEditReason
-                                  ? "black"
-                                  : "#ccc",
-                              cursor: canEditReason ? "pointer" : "not-allowed",
-                              fontWeight: "normal",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {reason}
-                          </button>
-                        ))}
+                                if (currentReason === reason) {
+                                  setAbsenceData({
+                                    ...absenceData,
+                                    [s.id]: {
+                                      reason: "",
+                                      note: "",
+                                    },
+                                  });
+                                } else {
+                                  setAbsenceData({
+                                    ...absenceData,
+                                    [s.id]: {
+                                      reason,
+                                      note: currentNote,
+                                    },
+                                  });
+                                }
+                              }}
+                              disabled={!canEditReason}
+                              style={{
+                                padding: "8px 12px",
+                                borderRadius: "6px",
+                                fontSize: "13px",
+                                border:
+                                  currentReason === reason
+                                    ? "2px solid #3B82F6"
+                                    : "1px solid #ddd",
+                                background:
+                                  currentReason === reason
+                                    ? "#3B82F6"
+                                    : "white",
+                                color:
+                                  currentReason === reason
+                                    ? "white"
+                                    : canEditReason
+                                    ? "black"
+                                    : "#ccc",
+                                cursor: canEditReason
+                                  ? "pointer"
+                                  : "not-allowed",
+                                fontWeight: "normal",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {reason}
+                            </button>
+                          )
+                        )}
                       </div>
 
                       {currentReason &&
@@ -828,6 +879,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                 { color: "#FEE2E2", label: "미입실" },
                 { color: "#FED7AA", label: "미예약" },
                 { color: "#DBEAFE", label: "사유입력" },
+                { color: "#F3F4F6", label: "퇴사" },
               ].map((item) => (
                 <div
                   key={item.label}

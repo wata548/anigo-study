@@ -18,6 +18,7 @@ const AdminView: React.FC<AdminViewProps> = ({
   const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
   const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [showWithdrawn, setShowWithdrawn] = useState(false); // ✅ 퇴사자 필터
 
   if (!loggedInUser || loggedInUser.role !== "admin") {
     return (
@@ -27,9 +28,40 @@ const AdminView: React.FC<AdminViewProps> = ({
     );
   }
 
+  // ✅ 퇴사자 필터 적용
+  const filteredStudents = showWithdrawn
+    ? students
+    : students.filter((s) => !s.is_withdrawn);
+
+  // ✅ 퇴사 토글 함수
+  const handleToggleWithdrawn = async (student: Student) => {
+    const action = student.is_withdrawn ? "퇴사 취소" : "퇴사 처리";
+    if (
+      !window.confirm(
+        `${student.name} (${student.grade}학년 ${student.class}반 ${student.number}번) 학생을 ${action}하시겠습니까?`
+      )
+    )
+      return;
+
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({ is_withdrawn: !student.is_withdrawn })
+        .eq("id", student.id);
+
+      if (error) throw error;
+
+      alert(`✅ ${student.name} 학생이 ${action}되었습니다.`);
+      await onDataChange();
+    } catch (error) {
+      console.error("퇴사 처리 오류:", error);
+      alert("퇴사 처리에 실패했습니다.");
+    }
+  };
+
   // 🔐 비밀번호 초기화 함수
   const resetPassword = async (student: Student) => {
-    const defaultPassword = "0000"; // 초기 비밀번호
+    const defaultPassword = "0000";
 
     if (
       !window.confirm(
@@ -58,9 +90,16 @@ const AdminView: React.FC<AdminViewProps> = ({
 
   const downloadExcel = () => {
     const csv = [
-      ["학년", "반", "번호", "이름", "바코드", "비밀번호", "고정좌석"].join(
-        ","
-      ),
+      [
+        "학년",
+        "반",
+        "번호",
+        "이름",
+        "바코드",
+        "비밀번호",
+        "고정좌석",
+        "퇴사여부",
+      ].join(","),
       ...students.map((s) =>
         [
           s.grade,
@@ -70,6 +109,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           s.barcode,
           s.password || "",
           s.fixed_seat_id || "",
+          s.is_withdrawn ? "퇴사" : "",
         ].join(",")
       ),
     ].join("\n");
@@ -103,6 +143,7 @@ const AdminView: React.FC<AdminViewProps> = ({
               barcode,
               password,
               fixedSeatId,
+              withdrawnStatus,
             ] = row.split(",");
             const id = `${grade}${classNum}${String(number).padStart(2, "0")}`;
             return {
@@ -114,6 +155,7 @@ const AdminView: React.FC<AdminViewProps> = ({
               barcode: barcode?.trim(),
               password: password?.trim() || "0000",
               fixed_seat_id: fixedSeatId?.trim() || null,
+              is_withdrawn: withdrawnStatus?.trim() === "퇴사",
             };
           })
           .filter((s) => s.name && s.barcode);
@@ -531,22 +573,55 @@ const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
+      {/* ✅ 퇴사자 필터 체크박스 추가 */}
       <div
         style={{
-          background: "#FEF3C7",
-          padding: "12px",
-          borderRadius: "8px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
           marginBottom: "15px",
         }}
       >
-        <p style={{ fontSize: "13px", margin: 0, lineHeight: "1.4" }}>
-          💡 CSV 형식: 학년,반,번호,이름,바코드,비밀번호,고정좌석
-          <br />
-          <span style={{ fontSize: "12px", color: "#92400E" }}>
-            ※ 학생 명단 업로드 시 기존 명단은 삭제되지만, 예약/사유 기록은
-            유지됩니다.
+        <div
+          style={{
+            background: "#FEF3C7",
+            padding: "12px",
+            borderRadius: "8px",
+            flex: 1,
+          }}
+        >
+          <p style={{ fontSize: "13px", margin: 0, lineHeight: "1.4" }}>
+            💡 CSV 형식: 학년,반,번호,이름,바코드,비밀번호,고정좌석,퇴사여부
+            <br />
+            <span style={{ fontSize: "12px", color: "#92400E" }}>
+              ※ 학생 명단 업로드 시 기존 명단은 삭제되지만, 예약/사유 기록은
+              유지됩니다.
+            </span>
+          </p>
+        </div>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "12px 16px",
+            marginLeft: "10px",
+            border: "2px solid #ddd",
+            borderRadius: "8px",
+            cursor: "pointer",
+            background: showWithdrawn ? "#FEE2E2" : "white",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showWithdrawn}
+            onChange={(e) => setShowWithdrawn(e.target.checked)}
+          />
+          <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+            퇴사자 표시
           </span>
-        </p>
+        </label>
       </div>
 
       <div
@@ -561,7 +636,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           style={{
             width: "100%",
             borderCollapse: "collapse",
-            minWidth: "700px",
+            minWidth: "800px",
           }}
         >
           <thead>
@@ -644,15 +719,32 @@ const AdminView: React.FC<AdminViewProps> = ({
                   fontSize: "14px",
                 }}
               >
-                비밀번호 관리
+                비밀번호
+              </th>
+              <th
+                style={{
+                  padding: "12px 8px",
+                  textAlign: "center",
+                  borderBottom: "2px solid #ddd",
+                  fontSize: "14px",
+                }}
+              >
+                퇴사
               </th>
             </tr>
           </thead>
           <tbody>
-            {students.map((s, idx) => (
+            {filteredStudents.map((s, idx) => (
               <tr
                 key={s.id}
-                style={{ background: idx % 2 === 0 ? "white" : "#F9FAFB" }}
+                style={{
+                  background: s.is_withdrawn
+                    ? "#FEE2E2"
+                    : idx % 2 === 0
+                    ? "white"
+                    : "#F9FAFB",
+                  opacity: s.is_withdrawn ? 0.7 : 1,
+                }}
               >
                 <td
                   style={{
@@ -692,6 +784,21 @@ const AdminView: React.FC<AdminViewProps> = ({
                   }}
                 >
                   {s.name}
+                  {s.is_withdrawn && (
+                    <span
+                      style={{
+                        marginLeft: "8px",
+                        background: "#EF4444",
+                        color: "white",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      퇴사
+                    </span>
+                  )}
                 </td>
                 <td
                   style={{
@@ -749,6 +856,29 @@ const AdminView: React.FC<AdminViewProps> = ({
                     🔐 초기화
                   </button>
                 </td>
+                <td
+                  style={{
+                    padding: "10px 8px",
+                    textAlign: "center",
+                    borderBottom: "1px solid #E5E7EB",
+                  }}
+                >
+                  <button
+                    onClick={() => handleToggleWithdrawn(s)}
+                    style={{
+                      padding: "6px 12px",
+                      background: s.is_withdrawn ? "#10B981" : "#EF4444",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {s.is_withdrawn ? "취소" : "퇴사"}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -763,13 +893,17 @@ const AdminView: React.FC<AdminViewProps> = ({
           fontSize: "14px",
         }}
       >
-        총 {students.length}명 (1학년:{" "}
-        {students.filter((s) => s.grade === 1).length}
-        명, 2학년: {students.filter((s) => s.grade === 2).length}명, 3학년:{" "}
-        {students.filter((s) => s.grade === 3).length}명)
+        총 {filteredStudents.length}명 (1학년:{" "}
+        {filteredStudents.filter((s) => s.grade === 1).length}
+        명, 2학년: {filteredStudents.filter((s) => s.grade === 2).length}명,
+        3학년: {filteredStudents.filter((s) => s.grade === 3).length}명)
+        {!showWithdrawn &&
+          students.filter((s) => s.is_withdrawn).length > 0 && (
+            <span style={{ color: "#EF4444", marginLeft: "10px" }}>
+              | 퇴사자 {students.filter((s) => s.is_withdrawn).length}명 숨김
+            </span>
+          )}
       </div>
-
-      {/* 모달들은 생략 (기존 코드와 동일) */}
     </div>
   );
 };
