@@ -265,14 +265,6 @@ const KioskView: React.FC<KioskViewProps> = ({
         )
     );
 
-    const groupedSeats: { [key: string]: Seat[] } = {};
-    availableSeatsForSelection.forEach((seat: Seat) => {
-      if (!groupedSeats[seat.group]) {
-        groupedSeats[seat.group] = [];
-      }
-      groupedSeats[seat.group].push(seat);
-    });
-
     // 3학년 좌석 선택하지 않음 처리 함수
     const handleNoSeatSelection = async () => {
       if (!studentForSeatSelection) return;
@@ -357,8 +349,8 @@ const KioskView: React.FC<KioskViewProps> = ({
             </h1>
             <p style={{ fontSize: "18px", color: "#6B7280" }}>
               {studentForSeatSelection.grade}학년{" "}
-              {studentForSeatSelection.class}반 {studentForSeatSelection.number}
-              번
+              {studentForSeatSelection.class}반{" "}
+              {studentForSeatSelection.number}번
             </p>
           </div>
 
@@ -435,9 +427,8 @@ const KioskView: React.FC<KioskViewProps> = ({
           )}
 
           <div style={{ display: "grid", gap: "25px" }}>
-            {Object.entries(groupedSeats).map(([group, groupSeats]) => (
+            {studentForSeatSelection.grade === 3 && (
               <div
-                key={group}
                 style={{
                   border: "2px solid #ddd",
                   borderRadius: "16px",
@@ -453,89 +444,254 @@ const KioskView: React.FC<KioskViewProps> = ({
                     color: "#1F2937",
                   }}
                 >
-                  {group}그룹 ({groupSeats.length}석 사용 가능)
+                  A그룹 - 3학년석
                 </h3>
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns:
-                      group === "D"
-                        ? isMobile
-                          ? "repeat(6, 1fr)"
-                          : "repeat(8, 1fr)"
-                        : isMobile
-                        ? "repeat(5, 1fr)"
-                        : "repeat(7, 1fr)",
+                    gridTemplateColumns: isMobile
+                      ? "repeat(5, 1fr)"
+                      : "repeat(7, 1fr)",
                     gap: "12px",
                   }}
                 >
-                  {groupSeats.map((seat: Seat) => (
-                    <button
-                      key={seat.id}
-                      onClick={() => completeSeatSelection(seat.id)}
-                      style={{
-                        padding: isMobile ? "15px" : "20px",
-                        fontSize: isMobile ? "16px" : "20px",
-                        fontWeight: "bold",
-                        border: `3px solid ${
-                          group === "A"
-                            ? "#3B82F6"
-                            : group === "B"
-                            ? "#10B981"
-                            : group === "C"
-                            ? "#8B5CF6"
-                            : "#F59E0B"
-                        }`,
-                        borderRadius: "12px",
-                        background: "white",
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                        color:
-                          group === "A"
-                            ? "#3B82F6"
-                            : group === "B"
-                            ? "#10B981"
-                            : group === "C"
-                            ? "#8B5CF6"
-                            : "#F59E0B",
-                      }}
-                      onMouseEnter={(
-                        e: React.MouseEvent<HTMLButtonElement>
-                      ) => {
-                        const color =
-                          group === "A"
-                            ? "#3B82F6"
-                            : group === "B"
-                            ? "#10B981"
-                            : group === "C"
-                            ? "#8B5CF6"
-                            : "#F59E0B";
-                        e.currentTarget.style.background = color;
-                        e.currentTarget.style.color = "white";
-                        e.currentTarget.style.transform = "scale(1.05)";
-                      }}
-                      onMouseLeave={(
-                        e: React.MouseEvent<HTMLButtonElement>
-                      ) => {
-                        const color =
-                          group === "A"
-                            ? "#3B82F6"
-                            : group === "B"
-                            ? "#10B981"
-                            : group === "C"
-                            ? "#8B5CF6"
-                            : "#F59E0B";
-                        e.currentTarget.style.background = "white";
-                        e.currentTarget.style.color = color;
-                        e.currentTarget.style.transform = "scale(1)";
-                      }}
-                    >
-                      {seat.number}
-                    </button>
-                  ))}
+                  {availableSeatsForSelection
+                    .filter((s: Seat) => s.group === "A")
+                    .map((seat: Seat) => (
+                      <button
+                        key={seat.id}
+                        onClick={() => completeSeatSelection(seat.id)}
+                        style={{
+                          padding: isMobile ? "18px" : "24px",
+                          fontSize: isMobile ? "18px" : "22px",
+                          fontWeight: "bold",
+                          border: "3px solid #3B82F6",
+                          borderRadius: "12px",
+                          background: "white",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          color: "#3B82F6",
+                        }}
+                        onMouseEnter={(
+                          e: React.MouseEvent<HTMLButtonElement>
+                        ) => {
+                          e.currentTarget.style.background = "#3B82F6";
+                          e.currentTarget.style.color = "white";
+                          e.currentTarget.style.transform = "scale(1.05)";
+                        }}
+                        onMouseLeave={(
+                          e: React.MouseEvent<HTMLButtonElement>
+                        ) => {
+                          e.currentTarget.style.background = "white";
+                          e.currentTarget.style.color = "#3B82F6";
+                          e.currentTarget.style.transform = "scale(1)";
+                        }}
+                      >
+                        {seat.number}
+                      </button>
+                    ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {studentForSeatSelection.grade === 2 && (
+              <>
+                <div
+                  style={{
+                    border: "2px solid #ddd",
+                    borderRadius: "16px",
+                    padding: "20px",
+                    background: "white",
+                  }}
+                >
+                  <h3
+                    style={{
+                      marginBottom: "15px",
+                      fontSize: "20px",
+                      fontWeight: "bold",
+                      color: "#1F2937",
+                    }}
+                  >
+                    B그룹 - 2학년 폐쇄형
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile
+                        ? "repeat(5, 1fr)"
+                        : "repeat(7, 1fr)",
+                      gap: "12px",
+                    }}
+                  >
+                    {availableSeatsForSelection
+                      .filter((s: Seat) => s.group === "B")
+                      .map((seat: Seat) => (
+                        <button
+                          key={seat.id}
+                          onClick={() => completeSeatSelection(seat.id)}
+                          style={{
+                            padding: isMobile ? "15px" : "20px",
+                            fontSize: isMobile ? "16px" : "20px",
+                            fontWeight: "bold",
+                            border: "3px solid #10B981",
+                            borderRadius: "12px",
+                            background: "white",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                            color: "#10B981",
+                          }}
+                          onMouseEnter={(
+                            e: React.MouseEvent<HTMLButtonElement>
+                          ) => {
+                            e.currentTarget.style.background = "#10B981";
+                            e.currentTarget.style.color = "white";
+                            e.currentTarget.style.transform = "scale(1.05)";
+                          }}
+                          onMouseLeave={(
+                            e: React.MouseEvent<HTMLButtonElement>
+                          ) => {
+                            e.currentTarget.style.background = "white";
+                            e.currentTarget.style.color = "#10B981";
+                            e.currentTarget.style.transform = "scale(1)";
+                          }}
+                        >
+                          {seat.number}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: "2px solid #ddd",
+                    borderRadius: "16px",
+                    padding: "20px",
+                    background: "white",
+                  }}
+                >
+                  <h3
+                    style={{
+                      marginBottom: "15px",
+                      fontSize: "20px",
+                      fontWeight: "bold",
+                      color: "#1F2937",
+                    }}
+                  >
+                    C그룹 - 2학년 폐쇄형
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile
+                        ? "repeat(5, 1fr)"
+                        : "repeat(7, 1fr)",
+                      gap: "12px",
+                    }}
+                  >
+                    {availableSeatsForSelection
+                      .filter((s: Seat) => s.group === "C")
+                      .map((seat: Seat) => (
+                        <button
+                          key={seat.id}
+                          onClick={() => completeSeatSelection(seat.id)}
+                          style={{
+                            padding: isMobile ? "15px" : "20px",
+                            fontSize: isMobile ? "16px" : "20px",
+                            fontWeight: "bold",
+                            border: "3px solid #8B5CF6",
+                            borderRadius: "12px",
+                            background: "white",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                            color: "#8B5CF6",
+                          }}
+                          onMouseEnter={(
+                            e: React.MouseEvent<HTMLButtonElement>
+                          ) => {
+                            e.currentTarget.style.background = "#8B5CF6";
+                            e.currentTarget.style.color = "white";
+                            e.currentTarget.style.transform = "scale(1.05)";
+                          }}
+                          onMouseLeave={(
+                            e: React.MouseEvent<HTMLButtonElement>
+                          ) => {
+                            e.currentTarget.style.background = "white";
+                            e.currentTarget.style.color = "#8B5CF6";
+                            e.currentTarget.style.transform = "scale(1)";
+                          }}
+                        >
+                          {seat.number}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: "2px solid #ddd",
+                    borderRadius: "16px",
+                    padding: "20px",
+                    background: "white",
+                  }}
+                >
+                  <h3
+                    style={{
+                      marginBottom: "15px",
+                      fontSize: "20px",
+                      fontWeight: "bold",
+                      color: "#1F2937",
+                    }}
+                  >
+                    D그룹 - 2학년 오픈형
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile
+                        ? "repeat(6, 1fr)"
+                        : "repeat(8, 1fr)",
+                      gap: "12px",
+                    }}
+                  >
+                    {availableSeatsForSelection
+                      .filter((s: Seat) => s.group === "D")
+                      .map((seat: Seat) => (
+                        <button
+                          key={seat.id}
+                          onClick={() => completeSeatSelection(seat.id)}
+                          style={{
+                            padding: isMobile ? "15px" : "20px",
+                            fontSize: isMobile ? "16px" : "20px",
+                            fontWeight: "bold",
+                            border: "3px solid #F59E0B",
+                            borderRadius: "12px",
+                            background: "white",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                            color: "#F59E0B",
+                          }}
+                          onMouseEnter={(
+                            e: React.MouseEvent<HTMLButtonElement>
+                          ) => {
+                            e.currentTarget.style.background = "#F59E0B";
+                            e.currentTarget.style.color = "white";
+                            e.currentTarget.style.transform = "scale(1.05)";
+                          }}
+                          onMouseLeave={(
+                            e: React.MouseEvent<HTMLButtonElement>
+                          ) => {
+                            e.currentTarget.style.background = "white";
+                            e.currentTarget.style.color = "#F59E0B";
+                            e.currentTarget.style.transform = "scale(1)";
+                          }}
+                        >
+                          {seat.number}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <button
@@ -826,7 +982,7 @@ const KioskView: React.FC<KioskViewProps> = ({
                   >
                     <span style={{ fontWeight: "bold" }}>
                       {student?.grade === 1 || !seat
-                        ? "입실만 기록"
+                        ? "입실"
                         : `${seat.type} ${seat.number}번`}
                     </span>
                     <span style={{ fontSize: "14px" }}>{r.check_in_time}</span>

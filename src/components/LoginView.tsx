@@ -358,7 +358,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onClose, onLoginSuccess }) => {
                   lineHeight: "1.4",
                 }}
               >
-                테스트: 2학년 1반 1번 / 비밀번호: 0101
+                테스트: 2학년 1반 1번 / 비밀번호: 0000
               </p>
             </div>
 
