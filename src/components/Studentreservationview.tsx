@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { Student, Seat, Reservation, Absence } from "../App";
+import SeatGrid from "./SeatGrid";
 
 interface StudentReservationViewProps {
   loggedInStudent: Student | null;
@@ -224,7 +225,7 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
     );
   }
 
-  // 🎯 2, 3학년 로직 (기존 코드)
+  // 🎯 2, 3학년 로직
   const myReservation = reservations.find(
     (r) => r.student_id === loggedInStudent.id && r.date === currentDate
   );
@@ -234,22 +235,6 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
   );
 
   const myFixedSeat = seats.find((s) => s.student_id === loggedInStudent.id);
-
-  const availableSeats = seats.filter((seat) => {
-    if (seat.grade !== loggedInStudent.grade) return false;
-    const reserved = reservations.find(
-      (r) => r.seat_id === seat.id && r.date === currentDate
-    );
-    return !reserved;
-  });
-
-  const groupedSeats: { [key: string]: typeof availableSeats } = {};
-  availableSeats.forEach((seat) => {
-    if (!groupedSeats[seat.group]) {
-      groupedSeats[seat.group] = [];
-    }
-    groupedSeats[seat.group].push(seat);
-  });
 
   const handleReservation = async () => {
     if (!selectedSeat) {
@@ -325,7 +310,7 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
   };
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
       <h2 style={{ fontSize: "24px", marginBottom: "20px" }}>
         좌석 예약 ({loggedInStudent.name} - {loggedInStudent.grade}학년{" "}
         {loggedInStudent.class}반)
@@ -393,66 +378,51 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
         </div>
       ) : (
         <>
+          {/* ✅ SeatGrid로 좌석 선택 */}
           <div
             style={{
-              background: "#F3F4F6",
+              background: "white",
               padding: "20px",
-              borderRadius: "8px",
+              borderRadius: "12px",
               marginBottom: "20px",
+              border: "2px solid #3B82F6",
             }}
           >
-            <h3 style={{ marginBottom: "15px" }}>좌석 선택</h3>
-            {Object.entries(groupedSeats).map(([group, groupSeats]) => (
-              <div key={group} style={{ marginBottom: "20px" }}>
-                <h4 style={{ marginBottom: "10px" }}>
-                  {group}그룹 ({groupSeats.length}석 사용 가능)
-                </h4>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))",
-                    gap: "8px",
-                  }}
-                >
-                  {groupSeats.map((seat) => (
-                    <button
-                      key={seat.id}
-                      onClick={() => setSelectedSeat(seat.id)}
-                      style={{
-                        padding: "12px",
-                        background:
-                          selectedSeat === seat.id ? "#3B82F6" : "white",
-                        color: selectedSeat === seat.id ? "white" : "#000",
-                        border:
-                          selectedSeat === seat.id
-                            ? "2px solid #3B82F6"
-                            : "1px solid #D1D5DB",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                      }}
-                    >
-                      {seat.number}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <h3 style={{ fontSize: "18px", marginBottom: "20px" }}>
+              📍 좌석 선택
+            </h3>
+
+            <SeatGrid
+              seats={seats}
+              reservations={reservations}
+              currentDate={currentDate}
+              grade={loggedInStudent.grade}
+              mode="select"
+              selectedSeat={selectedSeat}
+              onSeatClick={(seatId) => setSelectedSeat(seatId)}
+            />
+
             <button
               onClick={handleReservation}
               disabled={!selectedSeat}
               style={{
-                marginTop: "15px",
-                padding: "10px 20px",
+                marginTop: "20px",
+                width: "100%",
+                padding: "15px",
                 background: selectedSeat ? "#10B981" : "#9CA3AF",
                 color: "white",
                 border: "none",
-                borderRadius: "6px",
+                borderRadius: "8px",
                 cursor: selectedSeat ? "pointer" : "not-allowed",
                 fontWeight: "bold",
+                fontSize: "16px",
               }}
             >
-              예약하기
+              {selectedSeat
+                ? `${
+                    seats.find((s) => s.id === selectedSeat)?.number
+                  }번 좌석 예약하기`
+                : "좌석을 선택해주세요"}
             </button>
           </div>
 

@@ -18,18 +18,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const isMobile = window.innerWidth < 768;
 
-  // 학년별 학생 수
-  const grade1Students = students.filter((s) => s.grade === 1);
-  const grade2Students = students.filter((s) => s.grade === 2);
-  const grade3Students = students.filter((s) => s.grade === 3);
+  // ✅ 퇴사생 제외
+  const activeStudents = students.filter((s) => !s.is_withdrawn);
+
+  // 학년별 학생 수 (퇴사생 제외)
+  const grade1Students = activeStudents.filter((s) => s.grade === 1);
+  const grade2Students = activeStudents.filter((s) => s.grade === 2);
+  const grade3Students = activeStudents.filter((s) => s.grade === 3);
 
   // 오늘 예약 데이터
   const todayReservations = reservations.filter((r) => r.date === currentDate);
   const todayAbsences = absences.filter((a) => a.date === currentDate);
 
-  // 학년별 학생 ID 추출 함수
+  // 학년별 학생 ID 추출 함수 (퇴사생 제외)
   const getGradeStudentIds = (grade: number) => {
-    return students.filter((s) => s.grade === grade).map((s) => s.id);
+    return activeStudents.filter((s) => s.grade === grade).map((s) => s.id);
   };
 
   const grade1StudentIds = getGradeStudentIds(1);
@@ -77,9 +80,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     grade3StudentIds.includes(a.student_id)
   ).length;
 
-  // 전체 통계
+  // 전체 통계 (퇴사생 제외)
   const stats = {
-    total: students.length,
+    total: activeStudents.length,
     reserved: todayReservations.filter((r) => r.status === "예약").length,
     checkedIn: todayReservations.filter((r) => r.status === "입실완료").length,
     noShow: todayReservations.filter((r) => r.status === "미입실").length,

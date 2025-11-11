@@ -43,6 +43,32 @@ const TeacherView: React.FC<TeacherViewProps> = ({
     );
   }
 
+  // ✅ 퇴사 토글 함수 추가
+  const handleToggleWithdrawn = async (student: Student) => {
+    const action = student.is_withdrawn ? "퇴사 취소" : "퇴사 처리";
+    if (
+      !window.confirm(
+        `${student.name} (${student.grade}학년 ${student.class}반 ${student.number}번) 학생을 ${action}하시겠습니까?`
+      )
+    )
+      return;
+
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({ is_withdrawn: !student.is_withdrawn })
+        .eq("id", student.id);
+
+      if (error) throw error;
+
+      alert(`✅ ${student.name} 학생이 ${action}되었습니다.`);
+      await onDataChange();
+    } catch (error) {
+      console.error("퇴사 처리 오류:", error);
+      alert("퇴사 처리에 실패했습니다.");
+    }
+  };
+
   const classStudents = students.filter(
     (s: Student) => s.grade === selectedGrade && s.class === selectedClass
   );
@@ -624,35 +650,58 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                         minWidth: isMobile ? "100%" : "180px",
                       }}
                     >
-                      <span style={{ fontWeight: "bold", fontSize: "14px" }}>
-                        {s.number}번 {s.name}
-                        {s.is_withdrawn && (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              color: "#EF4444",
-                              marginLeft: "5px",
-                              background: "#FEE2E2",
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              fontWeight: "bold",
-                            }}
-                          >
-                            퇴사
-                          </span>
-                        )}
-                        {s.fixed_seat_id && !s.is_withdrawn && (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              color: "#10B981",
-                              marginLeft: "5px",
-                            }}
-                          >
-                            📌{s.fixed_seat_id}
-                          </span>
-                        )}
-                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <span style={{ fontWeight: "bold", fontSize: "14px" }}>
+                          {s.number}번 {s.name}
+                          {s.is_withdrawn && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                color: "#EF4444",
+                                marginLeft: "5px",
+                                background: "#FEE2E2",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              퇴사
+                            </span>
+                          )}
+                          {s.fixed_seat_id && !s.is_withdrawn && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                color: "#10B981",
+                                marginLeft: "5px",
+                              }}
+                            >
+                              📌{s.fixed_seat_id}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => handleToggleWithdrawn(s)}
+                          style={{
+                            padding: "4px 8px",
+                            background: s.is_withdrawn ? "#10B981" : "#EF4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {s.is_withdrawn ? "취소" : "퇴사"}
+                        </button>
+                      </div>
                       <span
                         style={{
                           fontSize: "11px",

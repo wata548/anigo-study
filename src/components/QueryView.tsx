@@ -22,8 +22,14 @@ const QueryView: React.FC<QueryViewProps> = ({
   const [queryDate, setQueryDate] = useState(currentDate);
   const [queryGrade, setQueryGrade] = useState(2);
   const [processingNoShow, setProcessingNoShow] = useState(false);
+  const [showWithdrawn, setShowWithdrawn] = useState(false); // ✅ 퇴사자 표시 필터
 
-  const gradeStudents = students.filter((s) => s.grade === queryGrade);
+  // ✅ 퇴사자 필터 적용
+  const filteredStudents = showWithdrawn
+    ? students
+    : students.filter((s) => !s.is_withdrawn);
+
+  const gradeStudents = filteredStudents.filter((s) => s.grade === queryGrade);
   const dateReservations = reservations.filter((r) => r.date === queryDate);
   const dateAbsences = absences.filter((a) => a.date === queryDate);
 
@@ -49,7 +55,9 @@ const QueryView: React.FC<QueryViewProps> = ({
 
   const downloadReport = () => {
     const csv = [
-      ["학년", "반", "번호", "이름", "상태", "좌석", "사유"].join(","),
+      ["학년", "반", "번호", "이름", "상태", "좌석", "사유", "퇴사여부"].join(
+        ","
+      ),
       ...dateData.map((s) =>
         [
           s.grade,
@@ -67,6 +75,7 @@ const QueryView: React.FC<QueryViewProps> = ({
             : "미신청",
           s.reservation?.seat_id || "-",
           s.absence?.reason || "",
+          s.is_withdrawn ? "퇴사" : "",
         ].join(",")
       ),
     ].join("\n");
@@ -171,24 +180,48 @@ const QueryView: React.FC<QueryViewProps> = ({
           출결 조회
         </h1>
 
-        {isTeacherOrAdmin && (
-          <button
-            onClick={handleNoShowCheck}
-            disabled={processingNoShow}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          {/* ✅ 퇴사자 필터 체크박스 */}
+          <label
             style={{
-              padding: "10px 20px",
-              background: processingNoShow ? "#9CA3AF" : "#EF4444",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: "bold",
-              cursor: processingNoShow ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "8px 12px",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              cursor: "pointer",
+              background: showWithdrawn ? "#FEE2E2" : "white",
               fontSize: "14px",
             }}
           >
-            {processingNoShow ? "처리중..." : "⚠️ 미입실 체크"}
-          </button>
-        )}
+            <input
+              type="checkbox"
+              checked={showWithdrawn}
+              onChange={(e) => setShowWithdrawn(e.target.checked)}
+            />
+            <span>퇴사자 표시</span>
+          </label>
+
+          {isTeacherOrAdmin && (
+            <button
+              onClick={handleNoShowCheck}
+              disabled={processingNoShow}
+              style={{
+                padding: "10px 20px",
+                background: processingNoShow ? "#9CA3AF" : "#EF4444",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: processingNoShow ? "not-allowed" : "pointer",
+                fontSize: "14px",
+              }}
+            >
+              {processingNoShow ? "처리중..." : "⚠️ 미입실 체크"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div
@@ -262,7 +295,11 @@ const QueryView: React.FC<QueryViewProps> = ({
                   let displayText = "미신청";
                   let bgColor = "#F3F4F6";
 
-                  if (s.reservation?.status === "입실완료") {
+                  // ✅ 퇴사 학생 처리
+                  if (s.is_withdrawn) {
+                    displayText = "퇴사";
+                    bgColor = "#FEE2E2";
+                  } else if (s.reservation?.status === "입실완료") {
                     displayText = s.reservation.seat_id || "출석";
                     bgColor = "#D1FAE5";
                   } else if (s.reservation?.status === "예약") {
@@ -289,11 +326,27 @@ const QueryView: React.FC<QueryViewProps> = ({
                         padding: "8px 0",
                         borderBottom: "1px solid #E5E7EB",
                         fontSize: "14px",
+                        opacity: s.is_withdrawn ? 0.6 : 1,
                       }}
                     >
                       <span>
                         {s.number}. {s.name}
-                        {s.fixed_seat_id && (
+                        {s.is_withdrawn && (
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              color: "#EF4444",
+                              marginLeft: "5px",
+                              background: "#FEE2E2",
+                              padding: "2px 6px",
+                              borderRadius: "3px",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            퇴사
+                          </span>
+                        )}
+                        {s.fixed_seat_id && !s.is_withdrawn && (
                           <span
                             style={{
                               fontSize: "11px",
@@ -356,6 +409,25 @@ const QueryView: React.FC<QueryViewProps> = ({
             <span style={{ fontWeight: "bold", fontSize: "18px" }}>
               {dateStats.total}명
             </span>
+            {!showWithdrawn &&
+              students.filter((s) => s.grade === queryGrade && s.is_withdrawn)
+                .length > 0 && (
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "#EF4444",
+                    marginLeft: "5px",
+                  }}
+                >
+                  (퇴사{" "}
+                  {
+                    students.filter(
+                      (s) => s.grade === queryGrade && s.is_withdrawn
+                    ).length
+                  }
+                  명 제외)
+                </span>
+              )}
           </div>
           <div>
             <span style={{ color: "#666" }}>출석: </span>
