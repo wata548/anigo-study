@@ -20,6 +20,7 @@ export interface Student {
   barcode: string;
   password?: string;
   fixed_seat_id?: string;
+  is_withdrawn?: boolean;
 }
 
 export interface User {
