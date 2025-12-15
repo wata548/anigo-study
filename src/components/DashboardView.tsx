@@ -252,7 +252,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           좌석 배치도
         </h3>
         <img
-          src="https://raw.githubusercontent.com/skywind99/anigo-study/refs/heads/main/src/position.jpg?token=GHSAT0AAAAAADN33CT7N2XAZPWQQPTZMZWE2JG3P7Q"
+          src="https://raw.githubusercontent.com/skywind99/anigo-study/refs/heads/main/src/position.jpg"
           alt="좌석 배치도"
           style={{
             width: "100%",
@@ -518,5 +518,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 };
 
 export default DashboardView;
+
 
 
