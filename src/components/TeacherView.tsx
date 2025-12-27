@@ -267,43 +267,65 @@ const TeacherView: React.FC<TeacherViewProps> = ({
       alert("데이터 리셋에 실패했습니다.");
     }
   };
-
+  //251227
   const handleSaveSeats = async () => {
     try {
-      const updates = Object.entries(seatAssignments).map(
-        ([studentId, seatId]) => ({
-          id: studentId,
-          fixed_seat_id: seatId || null,
-        })
-      );
+      // 🔥 타입 정의를 밖으로 빼기
+      type UpdateInfo = {
+        id: string;
+        old_seat_id: string | null | undefined;
+        new_seat_id: string | null;
+      };
+
+      // ✅ 변경사항만 필터링
+      const allUpdates = classStudents.map((student) => {
+        const newSeatId = seatAssignments[student.id];
+
+        // seatAssignments에 값이 있으면 (undefined가 아니면)
+        if (newSeatId !== undefined) {
+          const normalizedNew = newSeatId || null; // 빈 문자열은 null로
+          // 기존 값과 비교
+          if (student.fixed_seat_id !== normalizedNew) {
+            return {
+              id: student.id,
+              old_seat_id: student.fixed_seat_id,
+              new_seat_id: normalizedNew,
+            } as UpdateInfo;
+          }
+        }
+        return null;
+      });
+
+      // 🔥 null 필터링 후 타입 단언
+      const updates = allUpdates.filter((u): u is UpdateInfo => u !== null);
 
       if (updates.length === 0) {
         alert("변경된 좌석이 없습니다.");
         return;
       }
 
-      // 🔒 중복 체크 1: 같은 좌석을 여러 학생에게 배정하려는 경우
-      const seatIds = updates
-        .map((u) => u.fixed_seat_id)
-        .filter((id) => id !== null);
-      const uniqueSeatIds = new Set(seatIds);
+      // 🔒 중복 체크: 같은 좌석을 여러 학생에게 배정하려는 경우
+      const newSeatIds = updates
+        .map((u) => u.new_seat_id)
+        .filter((id): id is string => id !== null);
+      const uniqueSeatIds = new Set(newSeatIds);
 
-      if (seatIds.length !== uniqueSeatIds.size) {
+      if (newSeatIds.length !== uniqueSeatIds.size) {
         alert("같은 좌석을 여러 학생에게 배정할 수 없습니다.");
         return;
       }
 
-      // 🔒 중복 체크 2: 다른 학생이 이미 사용 중인 좌석인지 확인
+      // 🔒 다른 학생이 이미 사용 중인 좌석인지 확인
       for (const update of updates) {
-        if (update.fixed_seat_id) {
+        if (update.new_seat_id) {
           const existingStudent = students.find(
             (st: Student) =>
-              st.fixed_seat_id === update.fixed_seat_id && st.id !== update.id
+              st.fixed_seat_id === update.new_seat_id && st.id !== update.id
           );
 
           if (existingStudent) {
             alert(
-              `${update.fixed_seat_id} 좌석은 이미 ${existingStudent.name} 학생에게 배정되어 있습니다.`
+              `${update.new_seat_id} 좌석은 이미 ${existingStudent.name} 학생에게 배정되어 있습니다.`
             );
             return;
           }
@@ -312,9 +334,13 @@ const TeacherView: React.FC<TeacherViewProps> = ({
 
       // ✅ Student 테이블만 업데이트
       for (const update of updates) {
+        console.log(
+          `처리 중: ${update.id}, ${update.old_seat_id} → ${update.new_seat_id}`
+        );
+
         const { error } = await supabase
           .from("students")
-          .update({ fixed_seat_id: update.fixed_seat_id })
+          .update({ fixed_seat_id: update.new_seat_id })
           .eq("id", update.id);
 
         if (error) {
@@ -323,7 +349,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         }
       }
 
-      alert(`${updates.length}명의 좌석 배정이 완료되었습니다.`);
+      alert(`✅ ${updates.length}명의 좌석 배정이 완료되었습니다.`);
       setSeatAssignments({});
       setAssigningSeats(false);
       await onDataChange();
@@ -489,11 +515,20 @@ const TeacherView: React.FC<TeacherViewProps> = ({
             {classStudents.map((s: Student) => {
               // 🔒 이미 다른 학생에게 배정된 좌석 목록
               const assignedSeats = classStudents
-                .filter((st: Student) => st.id !== s.id) // 본인 제외
-                .map(
-                  (st: Student) => seatAssignments[st.id] || st.fixed_seat_id
-                )
+                .filter((st: Student) => st.id !== s.id)
+                .map((st: Student) => {
+                  // 🔥 undefined 체크로 변경
+                  return seatAssignments[st.id] !== undefined
+                    ? seatAssignments[st.id]
+                    : st.fixed_seat_id;
+                })
                 .filter(Boolean);
+
+              // 🔥 현재 선택된 값 (undefined 체크)
+              const currentValue =
+                seatAssignments[s.id] !== undefined
+                  ? seatAssignments[s.id]
+                  : s.fixed_seat_id || "";
 
               return (
                 <div
@@ -512,13 +547,13 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                     {s.number}번 {s.name}
                   </span>
                   <select
-                    value={seatAssignments[s.id] || s.fixed_seat_id || ""}
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                    value={currentValue}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                       setSeatAssignments({
                         ...seatAssignments,
-                        [s.id]: e.target.value,
-                      })
-                    }
+                        [s.id]: e.target.value, // 빈 문자열도 저장
+                      });
+                    }}
                     style={{
                       flex: 1,
                       padding: "8px",
@@ -546,6 +581,16 @@ const TeacherView: React.FC<TeacherViewProps> = ({
                         );
                       })}
                   </select>
+                  {/* 🔥 현재 상태 표시 추가 */}
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#666",
+                      minWidth: "80px",
+                    }}
+                  >
+                    {s.fixed_seat_id ? `현재: ${s.fixed_seat_id}` : "배정 없음"}
+                  </span>
                 </div>
               );
             })}
