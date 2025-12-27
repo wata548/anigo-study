@@ -15,10 +15,7 @@ const AdminView: React.FC<AdminViewProps> = ({
   currentDate,
   onDataChange,
 }) => {
-  const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
-  const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
-  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
-  const [showWithdrawn, setShowWithdrawn] = useState(false); // ✅ 퇴사자 필터
+  const [showWithdrawn, setShowWithdrawn] = useState(false);
 
   if (!loggedInUser || loggedInUser.role !== "admin") {
     return (
@@ -28,12 +25,10 @@ const AdminView: React.FC<AdminViewProps> = ({
     );
   }
 
-  // ✅ 퇴사자 필터 적용
   const filteredStudents = showWithdrawn
     ? students
     : students.filter((s) => !s.is_withdrawn);
 
-  // ✅ 퇴사 토글 함수
   const handleToggleWithdrawn = async (student: Student) => {
     const action = student.is_withdrawn ? "퇴사 취소" : "퇴사 처리";
     if (
@@ -59,7 +54,6 @@ const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  // 🔐 비밀번호 초기화 함수
   const resetPassword = async (student: Student) => {
     const defaultPassword = "0000";
 
@@ -222,7 +216,6 @@ const AdminView: React.FC<AdminViewProps> = ({
       const confirmMsg = `${lastYear}년 이전 데이터 ${totalCount}건을 삭제하시겠습니까?\n\n포함 내역:\n- 예약 데이터: ${resCount}건\n- 사유 데이터: ${absCount}건\n\n⚠️ 이 작업은 되돌릴 수 없습니다!`;
 
       if (!window.confirm(confirmMsg)) {
-        setShowCleanupConfirm(false);
         return;
       }
 
@@ -241,11 +234,10 @@ const AdminView: React.FC<AdminViewProps> = ({
       if (absError) throw absError;
 
       alert(`✅ ${lastYear}년 이전 데이터 ${totalCount}건이 삭제되었습니다.`);
-      setShowCleanupConfirm(false);
       onDataChange();
-    } catch (error) {
+    } catch (error: any) {
       console.error("삭제 오류:", error);
-      alert("데이터 삭제에 실패했습니다.");
+      alert(`데이터 삭제에 실패했습니다.\n오류: ${error.message || error}`);
     }
   };
 
@@ -255,76 +247,159 @@ const AdminView: React.FC<AdminViewProps> = ({
       const grade2Students = students.filter((s) => s.grade === 2);
       const grade3Students = students.filter((s) => s.grade === 3);
 
-      const confirmMsg = `학생 진급을 진행합니다.\n\n📊 현황:\n- 1학년 → 2학년: ${grade1Students.length}명\n- 2학년 → 3학년: ${grade2Students.length}명\n- 3학년 졸업 삭제: ${grade3Students.length}명\n\n⚠️ 추가 작업:\n- 전년도 예약/사유 데이터 삭제\n- 고정 좌석 정보 초기화\n\n이 작업은 되돌릴 수 없습니다!\n계속하시겠습니까?`;
+      const confirmMsg = `학생 진급을 진행합니다.\n\n📊 현황:\n- 1학년 → 2학년: ${grade1Students.length}명\n- 2학년 → 3학년: ${grade2Students.length}명\n- 3학년 졸업 삭제: ${grade3Students.length}명\n\n⚠️ 추가 작업:\n- 모든 학생의 고정 좌석 초기화\n- 예약/사유 데이터는 유지됩니다\n\n이 작업은 되돌릴 수 없습니다!\n계속하시겠습니까?`;
 
       if (!window.confirm(confirmMsg)) {
-        setShowPromoteConfirm(false);
         return;
       }
 
-      if (grade3Students.length > 0) {
-        const grade3Ids = grade3Students.map((s) => s.id);
-        const { error: deleteError } = await supabase
-          .from("students")
-          .delete()
-          .in("id", grade3Ids);
+      const currentYear = new Date().getFullYear();
 
-        if (deleteError) throw deleteError;
+      // ✅ 1단계: 모든 학생의 고정좌석 초기화
+      const { error: clearSeatsError } = await supabase
+        .from("students")
+        .update({ fixed_seat_id: null })
+        .not("fixed_seat_id", "is", null);
+
+      if (clearSeatsError) {
+        console.error("고정좌석 초기화 오류:", clearSeatsError);
       }
 
+      // ✅ 2단계: 3학년 학생 및 관련 데이터 삭제
+      if (grade3Students.length > 0) {
+        const grade3Ids = grade3Students.map((s) => s.id);
+
+        await supabase
+          .from("reservations")
+          .delete()
+          .in("student_id", grade3Ids);
+
+        await supabase.from("absences").delete().in("student_id", grade3Ids);
+
+        await supabase.from("students").delete().in("id", grade3Ids);
+      }
+
+      // ✅ 3단계: 2학년 → 3학년
       if (grade2Students.length > 0) {
         for (const student of grade2Students) {
+          const oldId = student.id;
           const newId = `3${student.class}${String(student.number).padStart(
             2,
             "0"
           )}`;
-          const { error } = await supabase
-            .from("students")
-            .update({
-              grade: 3,
-              id: newId,
-              fixed_seat_id: null,
-            })
-            .eq("id", student.id);
 
-          if (error) throw error;
+          const { error: insertError } = await supabase
+            .from("students")
+            .insert([
+              {
+                id: newId,
+                grade: 3,
+                class: student.class,
+                number: student.number,
+                name: student.name,
+                barcode: student.barcode,
+                password: student.password,
+                fixed_seat_id: null, // 고정좌석 초기화
+                is_withdrawn: student.is_withdrawn,
+              },
+            ]);
+
+          if (insertError) throw insertError;
+
+          // 올해 예약/사유 데이터의 student_id 업데이트
+          await supabase
+            .from("reservations")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .gte("date", `${currentYear}-01-01`);
+
+          await supabase
+            .from("absences")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .gte("date", `${currentYear}-01-01`);
+
+          // 작년 데이터도 업데이트 (삭제하지 않고 유지)
+          await supabase
+            .from("reservations")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .lt("date", `${currentYear}-01-01`);
+
+          await supabase
+            .from("absences")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .lt("date", `${currentYear}-01-01`);
+
+          await supabase.from("students").delete().eq("id", oldId);
         }
       }
 
+      // ✅ 4단계: 1학년 → 2학년
       if (grade1Students.length > 0) {
         for (const student of grade1Students) {
+          const oldId = student.id;
           const newId = `2${student.class}${String(student.number).padStart(
             2,
             "0"
           )}`;
-          const { error } = await supabase
-            .from("students")
-            .update({
-              grade: 2,
-              id: newId,
-              fixed_seat_id: null,
-            })
-            .eq("id", student.id);
 
-          if (error) throw error;
+          const { error: insertError } = await supabase
+            .from("students")
+            .insert([
+              {
+                id: newId,
+                grade: 2,
+                class: student.class,
+                number: student.number,
+                name: student.name,
+                barcode: student.barcode,
+                password: student.password,
+                fixed_seat_id: null, // 고정좌석 초기화
+                is_withdrawn: student.is_withdrawn,
+              },
+            ]);
+
+          if (insertError) throw insertError;
+
+          // 올해 예약/사유 데이터의 student_id 업데이트
+          await supabase
+            .from("reservations")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .gte("date", `${currentYear}-01-01`);
+
+          await supabase
+            .from("absences")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .gte("date", `${currentYear}-01-01`);
+
+          // 작년 데이터도 업데이트 (삭제하지 않고 유지)
+          await supabase
+            .from("reservations")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .lt("date", `${currentYear}-01-01`);
+
+          await supabase
+            .from("absences")
+            .update({ student_id: newId })
+            .eq("student_id", oldId)
+            .lt("date", `${currentYear}-01-01`);
+
+          await supabase.from("students").delete().eq("id", oldId);
         }
       }
 
-      const currentYear = new Date().getFullYear();
-      const lastYear = currentYear - 1;
-      const cutoffDate = `${lastYear}-12-31`;
-
-      await supabase.from("reservations").delete().lte("date", cutoffDate);
-      await supabase.from("absences").delete().lte("date", cutoffDate);
-
       alert(
-        `✅ 진급 처리가 완료되었습니다!\n\n처리 내역:\n- 1학년 → 2학년: ${grade1Students.length}명\n- 2학년 → 3학년: ${grade2Students.length}명\n- 3학년 졸업: ${grade3Students.length}명\n- 전년도 데이터 삭제 완료`
+        `✅ 진급 처리가 완료되었습니다!\n\n처리 내역:\n- 1학년 → 2학년: ${grade1Students.length}명\n- 2학년 → 3학년: ${grade2Students.length}명\n- 3학년 졸업: ${grade3Students.length}명\n- 고정 좌석 초기화 완료\n- 예약/사유 데이터 유지됨`
       );
-      setShowPromoteConfirm(false);
       onDataChange();
-    } catch (error) {
+    } catch (error: any) {
       console.error("진급 처리 오류:", error);
-      alert("진급 처리에 실패했습니다.");
+      alert(`진급 처리에 실패했습니다.\n오류: ${error.message || error}`);
     }
   };
 
@@ -343,7 +418,6 @@ const AdminView: React.FC<AdminViewProps> = ({
       const confirmMsg = `⚠️⚠️⚠️ 경고 ⚠️⚠️⚠️\n\n모든 데이터를 삭제합니다!\n\n삭제될 데이터:\n- 학생 명단: ${studentCount}명\n- 예약 데이터: ${resCount}건\n- 사유 데이터: ${absCount}건\n\n이 작업은 절대 되돌릴 수 없습니다!\n\n정말로 모든 데이터를 삭제하시겠습니까?`;
 
       if (!window.confirm(confirmMsg)) {
-        setShowDeleteAllConfirm(false);
         return;
       }
 
@@ -353,20 +427,35 @@ const AdminView: React.FC<AdminViewProps> = ({
 
       if (finalConfirm !== "삭제확인") {
         alert("취소되었습니다.");
-        setShowDeleteAllConfirm(false);
         return;
       }
 
-      await supabase.from("reservations").delete().neq("id", 0);
-      await supabase.from("absences").delete().neq("id", 0);
-      await supabase.from("students").delete().neq("id", "");
+      const { error: resError } = await supabase
+        .from("reservations")
+        .delete()
+        .neq("id", 0);
+
+      if (resError) throw resError;
+
+      const { error: absError } = await supabase
+        .from("absences")
+        .delete()
+        .neq("id", 0);
+
+      if (absError) throw absError;
+
+      const { error: studentsError } = await supabase
+        .from("students")
+        .delete()
+        .neq("id", "");
+
+      if (studentsError) throw studentsError;
 
       alert("✅ 모든 데이터가 삭제되었습니다.");
-      setShowDeleteAllConfirm(false);
       onDataChange();
-    } catch (error) {
+    } catch (error: any) {
       console.error("삭제 오류:", error);
-      alert("데이터 삭제에 실패했습니다.");
+      alert(`데이터 삭제에 실패했습니다.\n오류: ${error.message || error}`);
     }
   };
 
@@ -423,6 +512,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           marginBottom: "20px",
         }}
       >
+        {/* 📋 명단 관리 */}
         <div
           style={{
             border: "2px solid #3B82F6",
@@ -479,6 +569,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </div>
         </div>
 
+        {/* 🎓 진급 처리 */}
         <div
           style={{
             border: "2px solid #8B5CF6",
@@ -498,7 +589,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <button
-              onClick={() => setShowPromoteConfirm(true)}
+              onClick={handlePromote}
               style={{
                 padding: "10px",
                 background: "#8B5CF6",
@@ -521,6 +612,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </div>
         </div>
 
+        {/* 🗑️ 데이터 관리 */}
         <div
           style={{
             border: "2px solid #EF4444",
@@ -540,7 +632,7 @@ const AdminView: React.FC<AdminViewProps> = ({
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <button
-              onClick={() => setShowCleanupConfirm(true)}
+              onClick={handleDeleteOldData}
               style={{
                 padding: "10px",
                 background: "#F59E0B",
@@ -555,7 +647,7 @@ const AdminView: React.FC<AdminViewProps> = ({
               📅 전년도 데이터 삭제
             </button>
             <button
-              onClick={() => setShowDeleteAllConfirm(true)}
+              onClick={handleDeleteAll}
               style={{
                 padding: "10px",
                 background: "#EF4444",
@@ -573,7 +665,7 @@ const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
-      {/* ✅ 퇴사자 필터 체크박스 추가 */}
+      {/* 퇴사자 필터 */}
       <div
         style={{
           display: "flex",
@@ -624,6 +716,7 @@ const AdminView: React.FC<AdminViewProps> = ({
         </label>
       </div>
 
+      {/* 학생 테이블 */}
       <div
         style={{
           background: "white",

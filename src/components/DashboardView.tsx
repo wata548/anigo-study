@@ -89,6 +89,289 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     absent: todayAbsences.length,
   };
 
+  // 좌석 배경색 가져오기 함수
+  const getSeatBackground = (seatId: string) => {
+    const reservation = reservations.find(
+      (r) => r.seat_id === seatId && r.date === currentDate
+    );
+    if (reservation?.status === "입실완료") return "#D1FAE5";
+    if (reservation?.status === "예약") return "#FEF3C7";
+    if (reservation?.status === "미입실") return "#FEE2E2";
+    return "#F3F4F6";
+  };
+
+  // B구역 좌석 재정렬 (세로 우선)
+  const renderGroupB = () => {
+    const groupBSeats = seats
+      .filter((s) => s.group === "B")
+      .sort((a, b) => a.number - b.number);
+
+    const cols = 10;
+    const rows = 4;
+    const reorderedSeats: (Seat | null)[] = [];
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const seatIndex = col * rows + row;
+        if (seatIndex < groupBSeats.length) {
+          reorderedSeats.push(groupBSeats[seatIndex]);
+        } else {
+          reorderedSeats.push(null);
+        }
+      }
+    }
+
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "repeat(6, 1fr)" : "repeat(10, 1fr)",
+          gap: "6px",
+        }}
+      >
+        {reorderedSeats.map((seat, index) => {
+          if (!seat) {
+            return (
+              <div
+                key={`empty-${index}`}
+                style={{ visibility: "hidden" }}
+              ></div>
+            );
+          }
+          return (
+            <div
+              key={seat.id}
+              style={{
+                padding: "8px",
+                textAlign: "center",
+                borderRadius: "4px",
+                fontSize: "13px",
+                background: getSeatBackground(seat.id),
+              }}
+            >
+              {seat.number}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // C구역 좌석 재정렬 (세로 우선, 마지막 줄 양쪽 끝 빈칸)
+  const renderGroupC = () => {
+    const groupCSeats = seats
+      .filter((s) => s.group === "C")
+      .sort((a, b) => a.number - b.number);
+
+    const cols = 7;
+    const rows = 4;
+    const grid: (Seat | null)[][] = Array(rows)
+      .fill(null)
+      .map(() => Array(cols).fill(null));
+
+    let seatIdx = 0;
+    for (let col = 0; col < cols; col++) {
+      for (let row = 0; row < rows; row++) {
+        // 마지막 줄 양쪽 끝은 비움
+        if (row === 3 && (col === 0 || col === 6)) {
+          grid[row][col] = null;
+        } else {
+          if (seatIdx < groupCSeats.length) {
+            grid[row][col] = groupCSeats[seatIdx];
+            seatIdx++;
+          }
+        }
+      }
+    }
+
+    // grid를 1차원 배열로 변환
+    const flatSeats: (Seat | null)[] = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        flatSeats.push(grid[row][col]);
+      }
+    }
+
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "repeat(6, 1fr)" : "repeat(7, 1fr)",
+          gap: "6px",
+        }}
+      >
+        {flatSeats.map((seat, index) => {
+          if (!seat) {
+            return (
+              <div
+                key={`empty-${index}`}
+                style={{ visibility: "hidden" }}
+              ></div>
+            );
+          }
+          return (
+            <div
+              key={seat.id}
+              style={{
+                padding: "8px",
+                textAlign: "center",
+                borderRadius: "4px",
+                fontSize: "13px",
+                background: getSeatBackground(seat.id),
+              }}
+            >
+              {seat.number}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+  // D구역 렌더링 함수 추가 (renderGroupC 아래에)
+  const renderGroupD = () => {
+    const groupDSeats = seats
+      .filter((s) => s.group === "D")
+      .sort((a, b) => a.number - b.number);
+
+    // D-1 ~ D-12: 2x2 테이블 3개
+    const table2x2_seats = groupDSeats.slice(0, 12);
+    // D-13 ~ D-20: 1x8 줄
+    const row1x8_seats = groupDSeats.slice(12, 20);
+    // D-21 ~ D-26: 상단 오른쪽 3x2 테이블
+    const upperTableSeats = groupDSeats.slice(20, 26);
+    // D-27 ~ D-32: 하단 오른쪽 3x2 테이블
+    const lowerTableSeats = groupDSeats.slice(26, 32);
+
+    const table2x2_1 = table2x2_seats.slice(0, 4);
+    const table2x2_2 = table2x2_seats.slice(4, 8);
+    const table2x2_3 = table2x2_seats.slice(8, 12);
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          gap: isMobile ? "15px" : "30px",
+          flexWrap: "wrap",
+        }}
+      >
+        {/* A 그룹 */}
+        <div style={{ flex: "1 1 auto", minWidth: "250px" }}>
+          {/* 2x2 테이블 3개 */}
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              marginBottom: "10px",
+              justifyContent: "space-between",
+            }}
+          >
+            {[table2x2_1, table2x2_2, table2x2_3].map((table, tableIdx) => (
+              <div
+                key={`table-${tableIdx}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                  gap: "4px",
+                  flex: "1 1 0",
+                }}
+              >
+                {table.map((seat) => (
+                  <div
+                    key={seat.id}
+                    style={{
+                      padding: isMobile ? "6px" : "8px",
+                      textAlign: "center",
+                      borderRadius: "4px",
+                      fontSize: "13px",
+                      background: getSeatBackground(seat.id),
+                    }}
+                  >
+                    {seat.number}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* 1x8 줄 */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(8, 1fr)",
+              gap: "4px",
+            }}
+          >
+            {row1x8_seats.map((seat) => (
+              <div
+                key={seat.id}
+                style={{
+                  padding: isMobile ? "6px" : "8px",
+                  textAlign: "center",
+                  borderRadius: "4px",
+                  fontSize: "13px",
+                  background: getSeatBackground(seat.id),
+                }}
+              >
+                {seat.number}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* B 그룹 */}
+        <div style={{ flex: "0 0 auto", minWidth: "120px" }}>
+          {/* 상단 3x2 테이블 */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "4px",
+              marginBottom: "10px",
+            }}
+          >
+            {upperTableSeats.map((seat) => (
+              <div
+                key={seat.id}
+                style={{
+                  padding: isMobile ? "6px" : "8px",
+                  textAlign: "center",
+                  borderRadius: "4px",
+                  fontSize: "13px",
+                  background: getSeatBackground(seat.id),
+                }}
+              >
+                {seat.number}
+              </div>
+            ))}
+          </div>
+
+          {/* 하단 3x2 테이블 */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "4px",
+            }}
+          >
+            {lowerTableSeats.map((seat) => (
+              <div
+                key={seat.id}
+                style={{
+                  padding: isMobile ? "6px" : "8px",
+                  textAlign: "center",
+                  borderRadius: "4px",
+                  fontSize: "13px",
+                  background: getSeatBackground(seat.id),
+                }}
+              >
+                {seat.number}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
   return (
     <div style={{ padding: "15px" }}>
       <h1 style={{ fontSize: "20px", marginBottom: "20px" }}>
@@ -292,32 +575,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           >
             {seats
               .filter((s) => s.group === "A")
-              .map((seat) => {
-                const reservation = reservations.find(
-                  (r) => r.seat_id === seat.id && r.date === currentDate
-                );
-                return (
-                  <div
-                    key={seat.id}
-                    style={{
-                      padding: "8px",
-                      textAlign: "center",
-                      borderRadius: "4px",
-                      fontSize: "13px",
-                      background:
-                        reservation?.status === "입실완료"
-                          ? "#D1FAE5"
-                          : reservation?.status === "예약"
-                          ? "#FEF3C7"
-                          : reservation?.status === "미입실"
-                          ? "#FEE2E2"
-                          : "#F3F4F6",
-                    }}
-                  >
-                    {seat.number}
-                  </div>
-                );
-              })}
+              .sort((a, b) => a.number - b.number)
+              .map((seat) => (
+                <div
+                  key={seat.id}
+                  style={{
+                    padding: "8px",
+                    textAlign: "center",
+                    borderRadius: "4px",
+                    fontSize: "13px",
+                    background: getSeatBackground(seat.id),
+                  }}
+                >
+                  {seat.number}
+                </div>
+              ))}
           </div>
         </div>
 
@@ -331,44 +603,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <h3 style={{ marginBottom: "12px", fontSize: "15px" }}>
             B그룹 - 2학년 폐쇄형 (39석)
           </h3>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile
-                ? "repeat(6, 1fr)"
-                : "repeat(7, 1fr)",
-              gap: "6px",
-            }}
-          >
-            {seats
-              .filter((s) => s.group === "B")
-              .map((seat) => {
-                const reservation = reservations.find(
-                  (r) => r.seat_id === seat.id && r.date === currentDate
-                );
-                return (
-                  <div
-                    key={seat.id}
-                    style={{
-                      padding: "8px",
-                      textAlign: "center",
-                      borderRadius: "4px",
-                      fontSize: "13px",
-                      background:
-                        reservation?.status === "입실완료"
-                          ? "#D1FAE5"
-                          : reservation?.status === "예약"
-                          ? "#FEF3C7"
-                          : reservation?.status === "미입실"
-                          ? "#FEE2E2"
-                          : "#F3F4F6",
-                    }}
-                  >
-                    {seat.number}
-                  </div>
-                );
-              })}
-          </div>
+          {renderGroupB()}
         </div>
       </div>
 
@@ -389,44 +624,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <h3 style={{ marginBottom: "12px", fontSize: "15px" }}>
             C그룹 - 2학년 폐쇄형 (26석)
           </h3>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile
-                ? "repeat(6, 1fr)"
-                : "repeat(7, 1fr)",
-              gap: "6px",
-            }}
-          >
-            {seats
-              .filter((s) => s.group === "C")
-              .map((seat) => {
-                const reservation = reservations.find(
-                  (r) => r.seat_id === seat.id && r.date === currentDate
-                );
-                return (
-                  <div
-                    key={seat.id}
-                    style={{
-                      padding: "8px",
-                      textAlign: "center",
-                      borderRadius: "4px",
-                      fontSize: "13px",
-                      background:
-                        reservation?.status === "입실완료"
-                          ? "#D1FAE5"
-                          : reservation?.status === "예약"
-                          ? "#FEF3C7"
-                          : reservation?.status === "미입실"
-                          ? "#FEE2E2"
-                          : "#F3F4F6",
-                    }}
-                  >
-                    {seat.number}
-                  </div>
-                );
-              })}
-          </div>
+          {renderGroupC()}
         </div>
 
         <div
@@ -439,44 +637,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <h3 style={{ marginBottom: "12px", fontSize: "15px" }}>
             D그룹 - 2학년 오픈형 (32석)
           </h3>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile
-                ? "repeat(6, 1fr)"
-                : "repeat(8, 1fr)",
-              gap: "6px",
-            }}
-          >
-            {seats
-              .filter((s) => s.group === "D")
-              .map((seat) => {
-                const reservation = reservations.find(
-                  (r) => r.seat_id === seat.id && r.date === currentDate
-                );
-                return (
-                  <div
-                    key={seat.id}
-                    style={{
-                      padding: "8px",
-                      textAlign: "center",
-                      borderRadius: "4px",
-                      fontSize: "13px",
-                      background:
-                        reservation?.status === "입실완료"
-                          ? "#D1FAE5"
-                          : reservation?.status === "예약"
-                          ? "#FEF3C7"
-                          : reservation?.status === "미입실"
-                          ? "#FEE2E2"
-                          : "#F3F4F6",
-                    }}
-                  >
-                    {seat.number}
-                  </div>
-                );
-              })}
-          </div>
+          {renderGroupD()}
         </div>
       </div>
 

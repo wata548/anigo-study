@@ -282,6 +282,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         return;
       }
 
+      // 🔒 중복 체크 1: 같은 좌석을 여러 학생에게 배정하려는 경우
       const seatIds = updates
         .map((u) => u.fixed_seat_id)
         .filter((id) => id !== null);
@@ -292,25 +293,49 @@ const TeacherView: React.FC<TeacherViewProps> = ({
         return;
       }
 
+      // 🔒 중복 체크 2: 다른 학생이 이미 사용 중인 좌석인지 확인
+      for (const update of updates) {
+        if (update.fixed_seat_id) {
+          const existingStudent = students.find(
+            (st: Student) =>
+              st.fixed_seat_id === update.fixed_seat_id && st.id !== update.id
+          );
+
+          if (existingStudent) {
+            alert(
+              `${update.fixed_seat_id} 좌석은 이미 ${existingStudent.name} 학생에게 배정되어 있습니다.`
+            );
+            return;
+          }
+        }
+      }
+
+      // ✅ Student 테이블만 업데이트
       for (const update of updates) {
         const { error } = await supabase
           .from("students")
           .update({ fixed_seat_id: update.fixed_seat_id })
           .eq("id", update.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error("학생 업데이트 오류:", error);
+          throw error;
+        }
       }
 
       alert(`${updates.length}명의 좌석 배정이 완료되었습니다.`);
       setSeatAssignments({});
       setAssigningSeats(false);
       await onDataChange();
-    } catch (error) {
+    } catch (error: any) {
       console.error("좌석 배정 오류:", error);
-      alert("좌석 배정에 실패했습니다.");
+      alert(
+        `좌석 배정에 실패했습니다.\n오류: ${
+          error.message || JSON.stringify(error)
+        }`
+      );
     }
   };
-
   const handleClearAllSeats = async () => {
     if (!window.confirm("모든 학생의 고정 좌석을 해제하시겠습니까?")) {
       return;
@@ -329,9 +354,13 @@ const TeacherView: React.FC<TeacherViewProps> = ({
       alert("모든 고정 좌석이 해제되었습니다.");
       setSeatAssignments({});
       await onDataChange();
-    } catch (error) {
+    } catch (error: any) {
       console.error("좌석 해제 오류:", error);
-      alert("좌석 해제에 실패했습니다.");
+      alert(
+        `좌석 해제에 실패했습니다.\n오류: ${
+          error.message || JSON.stringify(error)
+        }`
+      );
     }
   };
 
@@ -457,48 +486,69 @@ const TeacherView: React.FC<TeacherViewProps> = ({
           </h3>
 
           <div style={{ marginBottom: "15px" }}>
-            {classStudents.map((s: Student) => (
-              <div
-                key={s.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px",
-                  background: "white",
-                  borderRadius: "8px",
-                  marginBottom: "8px",
-                }}
-              >
-                <span style={{ fontWeight: "bold", minWidth: "100px" }}>
-                  {s.number}번 {s.name}
-                </span>
-                <select
-                  value={seatAssignments[s.id] || s.fixed_seat_id || ""}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                    setSeatAssignments({
-                      ...seatAssignments,
-                      [s.id]: e.target.value,
-                    })
-                  }
+            {classStudents.map((s: Student) => {
+              // 🔒 이미 다른 학생에게 배정된 좌석 목록
+              const assignedSeats = classStudents
+                .filter((st: Student) => st.id !== s.id) // 본인 제외
+                .map(
+                  (st: Student) => seatAssignments[st.id] || st.fixed_seat_id
+                )
+                .filter(Boolean);
+
+              return (
+                <div
+                  key={s.id}
                   style={{
-                    flex: 1,
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "10px",
+                    background: "white",
+                    borderRadius: "8px",
+                    marginBottom: "8px",
                   }}
                 >
-                  <option value="">좌석 없음</option>
-                  {seats
-                    .filter((seat: Seat) => seat.grade === selectedGrade)
-                    .map((seat: Seat) => (
-                      <option key={seat.id} value={seat.id}>
-                        {seat.id}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            ))}
+                  <span style={{ fontWeight: "bold", minWidth: "100px" }}>
+                    {s.number}번 {s.name}
+                  </span>
+                  <select
+                    value={seatAssignments[s.id] || s.fixed_seat_id || ""}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                      setSeatAssignments({
+                        ...seatAssignments,
+                        [s.id]: e.target.value,
+                      })
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      border: "1px solid #ddd",
+                      borderRadius: "6px",
+                    }}
+                  >
+                    <option value="">좌석 없음</option>
+                    {seats
+                      .filter((seat: Seat) => seat.grade === selectedGrade)
+                      .map((seat: Seat) => {
+                        const isAssigned = assignedSeats.includes(seat.id);
+                        return (
+                          <option
+                            key={seat.id}
+                            value={seat.id}
+                            disabled={isAssigned}
+                            style={{
+                              color: isAssigned ? "#999" : "black",
+                              background: isAssigned ? "#f5f5f5" : "white",
+                            }}
+                          >
+                            {seat.id} {isAssigned ? "(배정됨)" : ""}
+                          </option>
+                        );
+                      })}
+                  </select>
+                </div>
+              );
+            })}
           </div>
 
           <div style={{ display: "flex", gap: "10px" }}>
@@ -551,6 +601,7 @@ const TeacherView: React.FC<TeacherViewProps> = ({
           </div>
         </div>
       ) : (
+        // ... 기존 코드
         <>
           <div
             style={{
