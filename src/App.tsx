@@ -524,8 +524,10 @@ const App: React.FC = () => {
           <StudentView
             loggedInStudent={loggedInStudent}
             loggedInUser={loggedInUser}
+            students={students} // 🔥 이 줄 추가!
             seats={seats}
             reservations={reservations}
+            absences={absences} // 🔥 이것도 추가 (필요하면)
             currentDate={currentDate}
             onDataChange={loadData}
             onShowLogin={() => setShowLogin(true)}

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
-import { Student, Seat, Reservation, User } from "../App";
+import { Student, Seat, Reservation, Absence, User } from "../App";
 import SeatGrid from "./SeatGrid";
 
 interface StudentViewProps {
   loggedInStudent: Student | null;
   loggedInUser?: User | null;
+  students: Student[]; // 🔥 추가
   seats: Seat[];
   reservations: Reservation[];
+  absences: Absence[]; // 🔥 추가
   currentDate: string;
   onDataChange: () => void;
   onShowLogin: () => void;
@@ -16,8 +18,10 @@ interface StudentViewProps {
 const StudentView: React.FC<StudentViewProps> = ({
   loggedInStudent,
   loggedInUser,
+  students, // 🔥 추가 - App에서 받음
   seats,
   reservations,
+  absences, // 🔥 추가
   currentDate,
   onDataChange,
   onShowLogin,
@@ -25,7 +29,6 @@ const StudentView: React.FC<StudentViewProps> = ({
   // 상태 변수
   const [selectedSeatId, setSelectedSeatId] = useState<string>("");
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
   const [currentReservation, setCurrentReservation] =
     useState<Reservation | null>(null);
 
@@ -33,12 +36,12 @@ const StudentView: React.FC<StudentViewProps> = ({
   const currentStudent = selectedStudent || loggedInStudent;
   const targetGrade = currentStudent?.grade || 3;
 
-  // 학생 목록 로드 (관리자용)
-  useEffect(() => {
-    if (isAdmin) {
-      loadStudents();
-    }
-  }, [isAdmin]);
+  // 🔥 loadStudents 제거 - 이제 props에서 받음
+  // useEffect(() => {
+  //   if (isAdmin) {
+  //     loadStudents();
+  //   }
+  // }, [isAdmin]);
 
   // 현재 학생의 예약 상태 로드 및 selectedSeatId 초기화
   useEffect(() => {
@@ -51,7 +54,6 @@ const StudentView: React.FC<StudentViewProps> = ({
       const initialSeatId =
         reservation?.seat_id || currentStudent.fixed_seat_id || "";
 
-      // 단, 고정좌석이 다른 사람에게 입실 완료 상태로 사용 중이라면 선택하지 않음
       const fixedSeatReservedByOthers = reservations.find(
         (r) =>
           r.seat_id === currentStudent.fixed_seat_id &&
@@ -71,28 +73,14 @@ const StudentView: React.FC<StudentViewProps> = ({
     }
   }, [currentStudent, reservations, currentDate, seats]);
 
-  const loadStudents = async () => {
-    const { data } = await supabase
-      .from("students")
-      .select("*")
-      .order("grade")
-      .order("class")
-      .order("number");
-
-    if (data) {
-      setStudents(data);
-    }
-  };
-
   // 예약/변경 가능 여부 확인
   const isSeatAvailableForReservation = (seatId: string) => {
     const reservation = reservations.find(
       (r) => r.seat_id === seatId && r.date === currentDate
     );
 
-    if (!reservation) return true; // 빈 좌석
+    if (!reservation) return true;
 
-    // 입실 완료된 좌석은 예약/변경 불가
     if (reservation.status === "입실완료") return false;
 
     return true;
@@ -102,6 +90,12 @@ const StudentView: React.FC<StudentViewProps> = ({
   const handleReservation = async (action: "reserve" | "cancel") => {
     if (!currentStudent) return;
 
+    // 🔒 고정좌석 학생 체크
+    if (action === "reserve" && currentStudent.fixed_seat_id) {
+      alert("⛔ 고정좌석이 배정된 학생은 좌석을 변경할 수 없습니다.");
+      return;
+    }
+
     try {
       if (action === "reserve") {
         if (!selectedSeatId) {
@@ -109,7 +103,19 @@ const StudentView: React.FC<StudentViewProps> = ({
           return;
         }
 
-        // 최종적으로 선택된 좌석이 다른 사람에게 입실 완료 상태로 사용 중인지 확인
+        // 🔒 다른 학생의 고정좌석 체크
+        const fixedSeatOwner = students.find(
+          (st) => st.fixed_seat_id === selectedSeatId
+        );
+
+        if (fixedSeatOwner) {
+          alert(
+            `⛔ 이 좌석은 ${fixedSeatOwner.name} 학생의 고정좌석입니다.\n다른 좌석을 선택해주세요.`
+          );
+          setSelectedSeatId("");
+          return;
+        }
+
         if (
           !isSeatAvailableForReservation(selectedSeatId) &&
           currentReservation?.seat_id !== selectedSeatId
@@ -118,22 +124,13 @@ const StudentView: React.FC<StudentViewProps> = ({
           return;
         }
 
-        // 예약 시간 관련 코드를 모두 제거합니다.
-        // const now = new Date();
-        // const hours = String(now.getHours()).padStart(2, "0");
-        // const minutes = String(now.getMinutes()).padStart(2, "0");
-        // const seconds = String(now.getSeconds()).padStart(2, "0");
-        // const reservationTime = `${hours}:${minutes}:${seconds}`;
-
         if (currentReservation) {
-          // 기존 예약/입실 기록이 있을 경우: 업데이트 (예약/변경)
           const { error } = await supabase
             .from("reservations")
             .update({
               seat_id: selectedSeatId,
               status: "예약",
-              // reservation_time 필드 제거
-              check_in_time: null, // 좌석 변경 시 입실 상태 초기화
+              check_in_time: null,
             })
             .eq("id", currentReservation.id)
             .select("*");
@@ -141,7 +138,6 @@ const StudentView: React.FC<StudentViewProps> = ({
           if (error) throw error;
           alert("좌석 예약이 변경되었습니다.");
         } else {
-          // 기존 예약/입실 기록이 없을 경우: 새로 생성
           const { error } = await supabase
             .from("reservations")
             .insert([
@@ -150,7 +146,6 @@ const StudentView: React.FC<StudentViewProps> = ({
                 seat_id: selectedSeatId,
                 date: currentDate,
                 status: "예약",
-                // reservation_time 필드 제거
               },
             ])
             .select("*");
@@ -164,7 +159,6 @@ const StudentView: React.FC<StudentViewProps> = ({
           return;
         }
 
-        // window.confirm 대신 Modal UI를 사용해야 하지만, 현재 상태 유지를 위해 임시로 window.confirm 사용
         if (
           !window.confirm(
             `${currentStudent.name} 학생의 예약을 취소하시겠습니까?`
@@ -172,7 +166,6 @@ const StudentView: React.FC<StudentViewProps> = ({
         )
           return;
 
-        // 예약 취소: 기록을 삭제합니다.
         const { error } = await supabase
           .from("reservations")
           .delete()
@@ -184,13 +177,9 @@ const StudentView: React.FC<StudentViewProps> = ({
         setSelectedSeatId("");
       }
 
-      await onDataChange(); // 데이터 새로고침
-      if (isAdmin && action !== "cancel") {
-        // 취소 후에는 학생 목록으로 돌아가지 않음
-        // 관리자 모드에서 예약을 성공적으로 마쳤다면, 학생 선택 목록으로 돌아갈 수 있도록 함
-        if (action === "reserve") {
-          setSelectedStudent(null);
-        }
+      await onDataChange();
+      if (isAdmin && action === "reserve") {
+        setSelectedStudent(null);
       }
     } catch (error) {
       console.error("예약 처리 오류:", error);
@@ -208,7 +197,6 @@ const StudentView: React.FC<StudentViewProps> = ({
 
       switch (currentReservation.status) {
         case "예약":
-          // reservation_time이 없으므로 시간 정보는 표시하지 않음
           return `✅ 예약 상태: ${seatInfo}`;
         case "입실완료":
           return `🚀 입실 완료: ${seatInfo}`;
@@ -222,8 +210,6 @@ const StudentView: React.FC<StudentViewProps> = ({
     }
     return "❌ 현재 예약된 좌석이 없습니다.";
   };
-
-  // --- 조건부 렌더링 ---
 
   if (!loggedInStudent && (!loggedInUser || loggedInUser.role !== "admin")) {
     return (
@@ -251,7 +237,6 @@ const StudentView: React.FC<StudentViewProps> = ({
   }
 
   if (isAdmin && !currentStudent) {
-    // 관리자 모드: 학생 선택 목록
     return (
       <div style={{ padding: "15px", maxWidth: "1000px", margin: "0 auto" }}>
         <div
@@ -304,7 +289,6 @@ const StudentView: React.FC<StudentViewProps> = ({
     );
   }
 
-  // --- 메인 예약/조회 화면 ---
   const selectedSeatObject = seats.find((s) => s.id === selectedSeatId);
   const isFixedSeatReservedByOthers =
     currentStudent.fixed_seat_id &&
@@ -318,7 +302,6 @@ const StudentView: React.FC<StudentViewProps> = ({
 
   return (
     <div style={{ padding: "15px", maxWidth: "1000px", margin: "0 auto" }}>
-      {/* 관리자 모드 학생 선택 UI */}
       {isAdmin && (
         <div
           style={{
@@ -345,7 +328,7 @@ const StudentView: React.FC<StudentViewProps> = ({
               onChange={(e) => {
                 const student = students.find((s) => s.id === e.target.value);
                 setSelectedStudent(student || null);
-                setSelectedSeatId(""); // 학생 변경 시 좌석 선택 초기화
+                setSelectedSeatId("");
               }}
               style={{
                 flex: 1,
@@ -394,7 +377,6 @@ const StudentView: React.FC<StudentViewProps> = ({
           {currentStudent.name} 학생 좌석 예약
         </h2>
 
-        {/* 현재 예약 상태 표시 */}
         <div
           style={{
             background:
@@ -426,7 +408,6 @@ const StudentView: React.FC<StudentViewProps> = ({
           {getReservationStatusText()}
         </div>
 
-        {/* 고정 좌석 경고 메시지 */}
         {currentStudent.fixed_seat_id &&
           !currentReservation &&
           isFixedSeatReservedByOthers && (
@@ -453,22 +434,21 @@ const StudentView: React.FC<StudentViewProps> = ({
           예약/변경할 좌석 선택
         </h3>
 
-        {/* ✅ SeatGrid 컴포넌트 사용 (배치도 형태) */}
+        {/* 🔥 SeatGrid에 students 전달 */}
         <div style={{ marginBottom: "30px" }}>
           <SeatGrid
             seats={seats}
             reservations={reservations}
             currentDate={currentDate}
-            grade={targetGrade} // 현재 로그인된 학생의 학년만 표시
+            grade={targetGrade}
             mode="select"
-            onSeatClick={setSelectedSeatId} // 클릭 시 selectedSeatId 업데이트
+            onSeatClick={setSelectedSeatId}
             selectedSeat={selectedSeatId}
-            // StudentView에서만 사용되는 prop: 현재 학생의 ID를 넘겨서 SeatGrid가 본인 예약 여부를 판단하도록 함
             loggedInStudentId={currentStudent.id}
+            students={students} // 🔥 이 줄 추가!
           />
         </div>
 
-        {/* 선택 좌석 및 버튼 영역 */}
         <div
           style={{
             paddingTop: "20px",
@@ -492,7 +472,6 @@ const StudentView: React.FC<StudentViewProps> = ({
           >
             <button
               onClick={() => handleReservation("reserve")}
-              // 입실 완료 상태이거나, 좌석이 선택되지 않았으면 버튼 비활성화
               disabled={
                 !selectedSeatId || currentReservation?.status === "입실완료"
               }
@@ -521,7 +500,6 @@ const StudentView: React.FC<StudentViewProps> = ({
             </button>
             <button
               onClick={() => handleReservation("cancel")}
-              // 예약 상태(예약/미입실)일 때만 취소 가능
               disabled={
                 !currentReservation ||
                 currentReservation.status === "입실완료" ||

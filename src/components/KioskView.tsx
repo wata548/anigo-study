@@ -51,7 +51,6 @@ const KioskView: React.FC<KioskViewProps> = ({
       const seconds = String(now.getSeconds()).padStart(2, "0");
       const checkInTime = `${hours}:${minutes}:${seconds}`;
 
-      // 1. 기존 예약이 있는지 확인 (예약된 좌석 변경 시 update를 위해)
       const existingReservation = reservations.find(
         (r) =>
           r.student_id === studentForSeatSelection.id && r.date === currentDate
@@ -60,7 +59,6 @@ const KioskView: React.FC<KioskViewProps> = ({
       let data, error;
 
       if (existingReservation) {
-        // 기존 예약이 있다면 업데이트 (좌석 변경 가능)
         ({ data, error } = await supabase
           .from("reservations")
           .update({
@@ -71,7 +69,6 @@ const KioskView: React.FC<KioskViewProps> = ({
           .eq("id", existingReservation.id)
           .select());
       } else {
-        // 기존 예약이 없다면 새로 생성 (미예약 후 좌석 선택 시)
         ({ data, error } = await supabase
           .from("reservations")
           .insert([
@@ -93,7 +90,7 @@ const KioskView: React.FC<KioskViewProps> = ({
         showOverlay({
           studentName: studentForSeatSelection.name,
           grade: studentForSeatSelection.grade,
-          seatInfo: `${seat?.type} ${seat?.number}번`,
+          seatInfo: `${seat?.group}구역 ${seat?.number}번`,
           status: "success",
           message: "입실 완료!",
         });
@@ -116,11 +113,26 @@ const KioskView: React.FC<KioskViewProps> = ({
     const student = students.find((s) => s.barcode === barcode);
 
     if (!student) {
-      alert("등록되지 않은 학생증입니다.");
+      showOverlay({
+        studentName: "오류",
+        grade: 0,
+        status: "error",
+        message: "등록되지 않은 학생증입니다.",
+      });
       return;
     }
 
-    // 🎯 1학년 처리 로직 (고정 좌석 미사용): 단순 입실만 체크
+    if (student.is_withdrawn) {
+      showOverlay({
+        studentName: student.name,
+        grade: student.grade,
+        status: "error",
+        message: "퇴사 처리된 학생입니다.",
+      });
+      return;
+    }
+
+    // 🎯 1학년 처리 (좌석 미사용)
     if (student.grade === 1) {
       try {
         const now = new Date();
@@ -129,29 +141,31 @@ const KioskView: React.FC<KioskViewProps> = ({
         const seconds = String(now.getSeconds()).padStart(2, "0");
         const checkTime = `${hours}:${minutes}:${seconds}`;
 
-        // 1. 당일 예약 기록 확인
         const existingReservation = reservations.find(
           (r) => r.student_id === student.id && r.date === currentDate
         );
 
-        // 1학년은 좌석 정보를 사용하지 않음 (seat_id = null)
-        const seatInfo = "좌석 미지정 입실";
+        const seatInfo = "좌석 미지정";
 
         if (existingReservation) {
-          // A. 이미 입실 완료 상태인 경우 -> 경고 메시지 후 종료
           if (existingReservation.status === "입실완료") {
-            alert("이미 입실 처리되었습니다.");
+            showOverlay({
+              studentName: student.name,
+              grade: student.grade,
+              seatInfo: seatInfo,
+              status: "error",
+              message: "이미 입실 처리되었습니다.",
+            });
             return;
           }
 
-          // B. 예약, 미입실, 퇴실 완료 등 다른 상태인 경우 -> 입실 완료로 업데이트
           const { error } = await supabase
             .from("reservations")
             .update({
-              seat_id: null, // 좌석 미지정 유지
+              seat_id: null,
               status: "입실완료",
               check_in_time: checkTime,
-              check_out_time: null, // 퇴실 기록 초기화
+              check_out_time: null,
             })
             .eq("id", existingReservation.id);
 
@@ -168,13 +182,12 @@ const KioskView: React.FC<KioskViewProps> = ({
           return;
         }
 
-        // 2. 예약 기록이 없는 경우 -> 신규 입실 기록 생성 (좌석 null)
         const { error, data } = await supabase
           .from("reservations")
           .insert([
             {
               student_id: student.id,
-              seat_id: null, // 좌석 미지정
+              seat_id: null,
               date: currentDate,
               status: "입실완료",
               check_in_time: checkTime,
@@ -189,37 +202,131 @@ const KioskView: React.FC<KioskViewProps> = ({
             grade: student.grade,
             seatInfo: seatInfo,
             status: "success",
-            message: "1학년 입실 완료!",
+            message: "입실 완료!",
           });
 
           await onDataChange();
         }
       } catch (error) {
         console.error("1학년 입실 오류:", error);
-        alert("입실 처리에 실패했습니다.");
+        showOverlay({
+          studentName: student.name,
+          grade: student.grade,
+          status: "error",
+          message: "입실 처리에 실패했습니다.",
+        });
       }
-      return; // 1학년은 여기서 로직 종료
+      return;
     }
 
-    // 🎯 2, 3학년 처리 로직
+    // 🔑 고정좌석 학생 체크 (2, 3학년)
+    if (student.fixed_seat_id) {
+      try {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, "0");
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+        const seconds = String(now.getSeconds()).padStart(2, "0");
+        const checkInTime = `${hours}:${minutes}:${seconds}`;
+
+        const existingReservation = reservations.find(
+          (r) => r.student_id === student.id && r.date === currentDate
+        );
+
+        // 이미 입실했는지 확인
+        if (existingReservation?.status === "입실완료") {
+          const seat = seats.find((s) => s.id === existingReservation.seat_id);
+          showOverlay({
+            studentName: student.name,
+            grade: student.grade,
+            seatInfo: seat
+              ? `${seat.group}구역 ${seat.number}번`
+              : "좌석 정보 없음",
+            status: "error",
+            message: "이미 입실 처리되었습니다.",
+          });
+          return;
+        }
+
+        // 고정좌석 정보 가져오기
+        const fixedSeat = seats.find((s) => s.id === student.fixed_seat_id);
+
+        let data, error;
+
+        if (existingReservation) {
+          // 기존 예약 업데이트
+          ({ data, error } = await supabase
+            .from("reservations")
+            .update({
+              seat_id: student.fixed_seat_id,
+              status: "입실완료",
+              check_in_time: checkInTime,
+            })
+            .eq("id", existingReservation.id)
+            .select());
+        } else {
+          // 새로 입실 기록 생성
+          ({ data, error } = await supabase
+            .from("reservations")
+            .insert([
+              {
+                student_id: student.id,
+                seat_id: student.fixed_seat_id,
+                date: currentDate,
+                status: "입실완료",
+                check_in_time: checkInTime,
+              },
+            ])
+            .select());
+        }
+
+        if (error) throw error;
+        if (data) {
+          showOverlay({
+            studentName: student.name,
+            grade: student.grade,
+            seatInfo: fixedSeat
+              ? `${fixedSeat.group}구역 ${fixedSeat.number}번 (고정)`
+              : "고정좌석",
+            status: "success",
+            message: "입실 완료!",
+          });
+
+          await onDataChange();
+        }
+      } catch (error) {
+        console.error("고정좌석 입실 오류:", error);
+        showOverlay({
+          studentName: student.name,
+          grade: student.grade,
+          status: "error",
+          message: "입실 처리에 실패했습니다.",
+        });
+      }
+      return;
+    }
+
+    // 🎯 2, 3학년 일반 학생 (고정좌석 없음)
     const reservation = reservations.find(
       (r) => r.student_id === student.id && r.date === currentDate
     );
 
     if (reservation) {
+      // 이미 입실 완료
       if (reservation.status === "입실완료") {
-        alert("이미 입실 처리되었습니다.");
+        const seat = seats.find((s) => s.id === reservation.seat_id);
+        showOverlay({
+          studentName: student.name,
+          grade: student.grade,
+          seatInfo: seat
+            ? `${seat.group}구역 ${seat.number}번`
+            : "좌석 정보 없음",
+          status: "error",
+          message: "이미 입실 처리되었습니다.",
+        });
         return;
       }
 
-      // ✅ 2학년은 예약 상태여도 (입실 완료가 아니면) 좌석 선택 화면으로 이동
-      if (student.grade === 2) {
-        setStudentForSeatSelection(student);
-        setSelectingSeat(true);
-        return;
-      }
-
-      // 3학년 (예약 상태)은 자동 입실 처리
+      // ✅ 예약이 있으면 바로 입실 처리 (2학년, 3학년 모두)
       try {
         const now = new Date();
         const hours = String(now.getHours()).padStart(2, "0");
@@ -243,7 +350,9 @@ const KioskView: React.FC<KioskViewProps> = ({
           showOverlay({
             studentName: student.name,
             grade: student.grade,
-            seatInfo: `${seat?.type} ${seat?.number}번`,
+            seatInfo: seat
+              ? `${seat.group}구역 ${seat.number}번`
+              : "좌석 정보 없음",
             status: "success",
             message: "입실 완료!",
           });
@@ -252,10 +361,15 @@ const KioskView: React.FC<KioskViewProps> = ({
         }
       } catch (error) {
         console.error("입실 오류:", error);
-        alert("입실 처리에 실패했습니다.");
+        showOverlay({
+          studentName: student.name,
+          grade: student.grade,
+          status: "error",
+          message: "입실 처리에 실패했습니다.",
+        });
       }
     } else {
-      // ✅ 예약이 없는 경우 (2, 3학년 모두 좌석 선택 화면으로 이동)
+      // ✅ 예약이 없는 경우 → 좌석 선택 화면으로 이동
       setStudentForSeatSelection(student);
       setSelectingSeat(true);
     }
@@ -272,7 +386,6 @@ const KioskView: React.FC<KioskViewProps> = ({
       const seconds = String(now.getSeconds()).padStart(2, "0");
       const checkInTime = `${hours}:${minutes}:${seconds}`;
 
-      // 기존 예약이 있는지 확인 (있으면 seat_id만 null로 업데이트)
       const existingReservation = reservations.find(
         (r) =>
           r.student_id === studentForSeatSelection.id && r.date === currentDate
@@ -281,7 +394,6 @@ const KioskView: React.FC<KioskViewProps> = ({
       let data, error;
 
       if (existingReservation) {
-        // 기존 예약 기록을 업데이트 (좌석 없음 처리)
         ({ data, error } = await supabase
           .from("reservations")
           .update({
@@ -292,7 +404,6 @@ const KioskView: React.FC<KioskViewProps> = ({
           .eq("id", existingReservation.id)
           .select());
       } else {
-        // 예약 기록이 없다면 새로 생성 (좌석 없음 처리)
         ({ data, error } = await supabase
           .from("reservations")
           .insert([
@@ -429,16 +540,17 @@ const KioskView: React.FC<KioskViewProps> = ({
             </button>
           )}
 
-          {/* SeatGrid 컴포넌트를 사용합니다. */}
+          {/* SeatGrid 컴포넌트 - students prop 추가 */}
           <div style={{ marginBottom: "30px" }}>
             <SeatGrid
               seats={seats}
               reservations={reservations}
               currentDate={currentDate}
-              grade={studentForSeatSelection.grade} // 2학년 또는 3학년의 좌석만 표시
+              grade={studentForSeatSelection.grade}
               mode="select"
               onSeatClick={setSelectedSeatId}
               selectedSeat={selectedSeatId}
+              students={students} // 추가: 고정좌석 체크용
             />
           </div>
 
@@ -489,7 +601,7 @@ const KioskView: React.FC<KioskViewProps> = ({
     );
   }
 
-  // 메인 키오스크 화면 (이전과 동일)
+  // 메인 키오스크 화면
   return (
     <div
       style={{
@@ -582,7 +694,7 @@ const KioskView: React.FC<KioskViewProps> = ({
         </h3>
         <div style={{ position: "relative" }}>
           <img
-            src="https://raw.githubusercontent.com/skywind99/temp/refs/heads/main/anigo5f.PNG"
+            src="https://raw.githubusercontent.com/skywind99/imgtemp/refs/heads/main/position.jpg"
             alt="좌석 배치도"
             style={{
               width: "100%",
@@ -700,6 +812,8 @@ const KioskView: React.FC<KioskViewProps> = ({
                 (s: Student) => s.id === r.student_id
               );
               const seat = seats.find((s: Seat) => s.id === r.seat_id);
+              const isFixedSeat = student?.fixed_seat_id === r.seat_id;
+
               return (
                 <div
                   key={r.id}
@@ -753,7 +867,9 @@ const KioskView: React.FC<KioskViewProps> = ({
                     <span style={{ fontWeight: "bold" }}>
                       {student?.grade === 1 || !seat
                         ? "입실"
-                        : `${seat.type} ${seat.number}번`}
+                        : `${seat.group}구역 ${seat.number}번${
+                            isFixedSeat ? " 🔑" : ""
+                          }`}
                     </span>
                     <span style={{ fontSize: "14px" }}>{r.check_in_time}</span>
                   </div>
