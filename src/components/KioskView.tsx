@@ -883,3 +883,4 @@ const KioskView: React.FC<KioskViewProps> = ({
 };
 
 export default KioskView;
+
