@@ -221,9 +221,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onClose }) => {
               type="text"
               value={loginId}
               onChange={(e) => setLoginId(e.target.value)}
-              placeholder="학생: 20315 / 교사: teacher / 관리자: admin"
+              placeholder="학생: 학번5자리 / 교사: teacher / 관리자: admin"
               style={{
-                width: "100%",
+                width: "90%",
                 padding: "12px 16px",
                 border: "2px solid #E5E7EB",
                 borderRadius: "8px",
@@ -265,9 +265,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onClose }) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="모든 사용자: 0000"
+              placeholder="비밀번호를 입력하세요"
               style={{
-                width: "100%",
+                width: "90%",
                 padding: "12px 16px",
                 border: "2px solid #E5E7EB",
                 borderRadius: "8px",
@@ -284,9 +284,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onClose }) => {
                 color: "#6B7280",
                 marginTop: "6px",
               }}
-            >
-              💡 모든 사용자 비밀번호: 0000
-            </p>
+            ></p>
           </div>
 
           {/* 에러 메시지 */}
