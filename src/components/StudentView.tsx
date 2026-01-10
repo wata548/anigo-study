@@ -493,10 +493,7 @@ const StudentView: React.FC<StudentViewProps> = ({
                 transition: "background 0.2s",
               }}
             >
-              {currentReservation?.status === "예약" ||
-              currentReservation?.seat_id !== selectedSeatId
-                ? "예약 변경하기"
-                : "좌석 예약하기"}
+              {currentReservation ? "예약 변경하기" : "예약 하기"}
             </button>
             <button
               onClick={() => handleReservation("cancel")}
