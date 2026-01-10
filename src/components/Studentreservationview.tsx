@@ -24,30 +24,35 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
 }) => {
   const [selectedSeat, setSelectedSeat] = useState<string>("");
   const [absenceReason, setAbsenceReason] = useState("");
-  const [isReserving, setIsReserving] = useState(false); // 예약 진행 중 표시
+  const [isReserving, setIsReserving] = useState(false);
+
+  // 내 예약 정보
+  const myReservation = reservations.find(
+    (r) => r.student_id === loggedInStudent?.id && r.date === currentDate
+  );
+
+  const myAbsence = absences.find(
+    (a) => a.student_id === loggedInStudent?.id && a.date === currentDate
+  );
 
   // 🔄 실시간 예약 변경 감지
   useEffect(() => {
     if (!loggedInStudent) return;
 
-    // Supabase 실시간 구독 설정
     const channel = supabase
       .channel("reservations-changes")
       .on(
         "postgres_changes",
         {
-          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          event: "*",
           schema: "public",
           table: "reservations",
           filter: `date=eq.${currentDate}`,
         },
         (payload) => {
           console.log("예약 변경 감지:", payload);
-
-          // 즉시 데이터 새로고침
           onDataChange();
 
-          // 내가 선택한 좌석이 다른 사람이 예약한 좌석이면 알림 및 초기화
           if (
             payload.eventType === "INSERT" &&
             selectedSeat === payload.new.seat_id &&
@@ -61,13 +66,12 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
                 reservedStudent?.name || "다른 학생"
               }에 의해 예약되었습니다.\n다른 좌석을 선택해주세요.`
             );
-            setSelectedSeat(""); // 선택 초기화
+            setSelectedSeat("");
           }
         }
       )
       .subscribe();
 
-    // 컴포넌트 언마운트 시 구독 해제
     return () => {
       supabase.removeChannel(channel);
     };
@@ -91,13 +95,6 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
 
   // 🎯 1학년 전용 화면
   if (loggedInStudent.grade === 1) {
-    const myAbsence = absences.find(
-      (a) => a.student_id === loggedInStudent.id && a.date === currentDate
-    );
-    const myReservation = reservations.find(
-      (r) => r.student_id === loggedInStudent.id && r.date === currentDate
-    );
-
     const handleAbsenceSubmit = async () => {
       if (!absenceReason.trim()) {
         alert("사유를 입력해주세요.");
@@ -281,15 +278,6 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
     );
   }
 
-  // 🎯 2, 3학년 로직
-  const myReservation = reservations.find(
-    (r) => r.student_id === loggedInStudent.id && r.date === currentDate
-  );
-
-  const myAbsence = absences.find(
-    (a) => a.student_id === loggedInStudent.id && a.date === currentDate
-  );
-
   // 🔑 고정좌석이 있는지 확인
   const isFixedSeatStudent = !!loggedInStudent.fixed_seat_id;
   const myFixedSeat = isFixedSeatStudent
@@ -331,7 +319,7 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
           학년 {loggedInStudent.class}반)
         </h2>
 
-        {/* 고정좌석 안내 - 매우 강조 */}
+        {/* 고정좌석 안내 */}
         <div
           style={{
             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -533,11 +521,8 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
 
   // 🎯 일반 학생 (고정좌석 없음)
   const handleReservation = async () => {
-    // 🔒 1차 체크: 고정좌석 학생은 절대 예약 불가
     if (loggedInStudent.fixed_seat_id) {
-      alert(
-        "⛔ 고정좌석이 배정된 학생은 좌석을 변경할 수 없습니다.\n관리자에게 문의하세요."
-      );
+      alert("⛔ 고정좌석이 배정된 학생은 좌석을 변경할 수 없습니다.");
       setSelectedSeat("");
       return;
     }
@@ -547,28 +532,36 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
       return;
     }
 
-    // 🚫 중복 예약 방지
     if (isReserving) {
       alert("예약 처리 중입니다. 잠시만 기다려주세요.");
       return;
     }
 
+    // 🔄 예약 변경인 경우 확인
+    if (myReservation) {
+      const currentSeatInfo = seats.find((s) => s.id === myReservation.seat_id);
+      const newSeatInfo = seats.find((s) => s.id === selectedSeat);
+
+      if (
+        !confirm(
+          `예약을 변경하시겠습니까?\n\n현재: ${currentSeatInfo?.group}구역 ${currentSeatInfo?.number}번\n변경: ${newSeatInfo?.group}구역 ${newSeatInfo?.number}번`
+        )
+      ) {
+        return;
+      }
+    }
+
     setIsReserving(true);
 
     try {
-      // 🔄 실시간으로 최신 예약 데이터 확인 (DB에서 직접)
       const { data: latestReservations, error: fetchError } = await supabase
         .from("reservations")
         .select("*, students(*)")
         .eq("date", currentDate)
-        .eq("seat_id", selectedSeat); // 선택한 좌석만 조회
+        .eq("seat_id", selectedSeat);
 
-      if (fetchError) {
-        console.error("예약 조회 오류:", fetchError);
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
-      // 🔒 2차 체크: 선택한 좌석이 다른 학생의 고정좌석인지 확인
       const fixedSeatOwner = students.find(
         (st) => st.fixed_seat_id === selectedSeat
       );
@@ -583,7 +576,6 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
         return;
       }
 
-      // 🔒 3차 체크: 이미 다른 학생이 예약한 좌석인지 확인 (최신 데이터 기준)
       if (latestReservations && latestReservations.length > 0) {
         const existingReservation = latestReservations[0];
         const reservedStudentName =
@@ -593,13 +585,22 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
           `⛔ 이미 예약된 좌석입니다.\n\n${reservedStudentName}이(가) 예약한 좌석입니다.\n\n좌석 상태가 업데이트됩니다.\n다른 좌석을 선택해주세요.`
         );
         setSelectedSeat("");
-        await onDataChange(); // 화면 새로고침하여 최신 좌석 상태 반영
+        await onDataChange();
         setIsReserving(false);
         return;
       }
 
-      // ✅ 예약 실행 - 트랜잭션처럼 처리
-      const { data: insertData, error: insertError } = await supabase
+      // 🔄 예약 변경인 경우: 기존 예약 삭제
+      if (myReservation) {
+        const { error: deleteError } = await supabase
+          .from("reservations")
+          .delete()
+          .eq("id", myReservation.id);
+
+        if (deleteError) throw deleteError;
+      }
+
+      const { error: insertError } = await supabase
         .from("reservations")
         .insert([
           {
@@ -612,15 +613,10 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
         .select();
 
       if (insertError) {
-        console.error("예약 삽입 오류:", insertError);
-        setIsReserving(false);
-
-        // 중복 예약 오류 처리 (unique constraint violation)
         if (
           insertError.code === "23505" ||
           insertError.message?.includes("duplicate key")
         ) {
-          // 한 번 더 최신 데이터 확인
           const { data: recheckData } = await supabase
             .from("reservations")
             .select("*, students(*)")
@@ -631,40 +627,31 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
             recheckData?.[0]?.students?.name || "다른 학생";
 
           alert(
-            `⛔ 이미 예약된 좌석입니다.\n${conflictStudent}이(가) 먼저 예약했습니다.\n\n좌석 상태가 업데이트됩니다.\n다른 좌석을 선택해주세요.`
+            `⛔ 이미 예약된 좌석입니다.\n${conflictStudent}이(가) 먼저 예약했습니다.`
           );
           setSelectedSeat("");
           await onDataChange();
+          setIsReserving(false);
           return;
         }
 
-        // 기타 에러 처리
-        const errorMsg =
-          insertError.message || insertError.details || "알 수 없는 오류";
-        alert(`❌ 예약에 실패했습니다.\n\n${errorMsg}\n\n다시 시도해주세요.`);
+        alert(`❌ 예약에 실패했습니다.\n\n다시 시도해주세요.`);
         setSelectedSeat("");
         await onDataChange();
+        setIsReserving(false);
         return;
       }
 
-      // 예약 성공
-      alert("✅ 예약이 완료되었습니다!");
+      if (myReservation) {
+        alert("✅ 예약이 변경되었습니다!");
+      } else {
+        alert("✅ 예약이 완료되었습니다!");
+      }
       setSelectedSeat("");
       await onDataChange();
     } catch (error: any) {
       console.error("예약 처리 오류:", error);
-
-      // 에러 메시지 추출
-      let errorMessage = "알 수 없는 오류가 발생했습니다.";
-      if (error?.message) {
-        errorMessage = error.message;
-      } else if (error?.details) {
-        errorMessage = error.details;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-
-      alert(`❌ 예약에 실패했습니다.\n\n${errorMessage}\n\n다시 시도해주세요.`);
+      alert(`❌ 예약에 실패했습니다.\n\n다시 시도해주세요.`);
       setSelectedSeat("");
       await onDataChange();
     } finally {
@@ -718,36 +705,27 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
     }
   };
 
-  // 🔍 좌석 클릭 핸들러 - 실시간 검증 추가
   const handleSeatClick = async (seatId: string) => {
-    // 🔒 고정좌석 학생 체크
     if (loggedInStudent.fixed_seat_id) {
       alert("⛔ 고정좌석이 배정된 학생은 좌석을 선택할 수 없습니다.");
       return;
     }
 
-    // 🔄 클릭한 좌석의 최신 상태 확인
-    const { data: seatCheck, error } = await supabase
+    const { data: seatCheck } = await supabase
       .from("reservations")
       .select("*, students(*)")
       .eq("date", currentDate)
       .eq("seat_id", seatId);
 
-    if (error) {
-      console.error("좌석 상태 확인 오류:", error);
-    }
-
-    // 이미 예약된 좌석이면 경고
     if (seatCheck && seatCheck.length > 0) {
       const reservedBy = seatCheck[0].students?.name || "다른 학생";
       alert(
         `⚠️ 이미 예약된 좌석입니다.\n\n${reservedBy}이(가) 예약한 좌석입니다.`
       );
-      await onDataChange(); // 화면 업데이트
+      await onDataChange();
       return;
     }
 
-    // 다른 학생의 고정좌석 체크
     const fixedOwner = students.find((st) => st.fixed_seat_id === seatId);
     if (fixedOwner) {
       alert(
@@ -756,7 +734,6 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
       return;
     }
 
-    // 선택 가능한 좌석이면 선택
     setSelectedSeat(seatId);
   };
 
@@ -767,7 +744,7 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
         {loggedInStudent.class}반)
       </h2>
 
-      {myReservation ? (
+      {myReservation && (
         <div
           style={{
             background: "#D1FAE5",
@@ -803,7 +780,9 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
             </button>
           )}
         </div>
-      ) : myAbsence ? (
+      )}
+
+      {myAbsence && (
         <div
           style={{
             background: "#FEF3C7",
@@ -815,101 +794,96 @@ const StudentReservationView: React.FC<StudentReservationViewProps> = ({
           <h3 style={{ marginBottom: "10px" }}>✅ 사유 제출 완료</h3>
           <p>{myAbsence.reason}</p>
         </div>
-      ) : (
-        <>
-          {/* SeatGrid로 좌석 선택 */}
-          <div
+      )}
+
+      {/* 좌석 선택 - 항상 표시 */}
+      <div
+        style={{
+          background: "white",
+          padding: "20px",
+          borderRadius: "12px",
+          marginBottom: "20px",
+          border: "2px solid #3B82F6",
+        }}
+      >
+        <h3 style={{ fontSize: "18px", marginBottom: "20px" }}>📍 좌석 선택</h3>
+
+        <SeatGrid
+          seats={seats}
+          reservations={reservations}
+          currentDate={currentDate}
+          grade={loggedInStudent.grade}
+          mode="select"
+          selectedSeat={selectedSeat}
+          onSeatClick={handleSeatClick}
+          loggedInStudentId={loggedInStudent.id}
+          students={students}
+        />
+
+        <button
+          onClick={handleReservation}
+          disabled={!selectedSeat || isReserving}
+          style={{
+            marginTop: "20px",
+            width: "100%",
+            padding: "15px",
+            background: selectedSeat && !isReserving ? "#10B981" : "#9CA3AF",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: selectedSeat && !isReserving ? "pointer" : "not-allowed",
+            fontWeight: "bold",
+            fontSize: "16px",
+          }}
+        >
+          {isReserving
+            ? "⏳ 예약 처리 중..."
+            : myReservation
+            ? "예약 변경하기"
+            : "예약 하기"}
+        </button>
+      </div>
+
+      {/* 사유 제출 */}
+      {!myAbsence && !myReservation && (
+        <div
+          style={{
+            background: "#F3F4F6",
+            padding: "20px",
+            borderRadius: "8px",
+          }}
+        >
+          <h3 style={{ marginBottom: "15px" }}>📝 미입실 사유 제출</h3>
+          <textarea
+            value={absenceReason}
+            onChange={(e) => setAbsenceReason(e.target.value)}
+            placeholder="미입실 사유를 입력하세요"
             style={{
-              background: "white",
-              padding: "20px",
-              borderRadius: "12px",
-              marginBottom: "20px",
-              border: "2px solid #3B82F6",
+              width: "100%",
+              padding: "10px",
+              border: "1px solid #D1D5DB",
+              borderRadius: "6px",
+              minHeight: "100px",
+              fontSize: "14px",
+            }}
+          />
+          <button
+            onClick={handleAbsenceSubmit}
+            disabled={!absenceReason.trim()}
+            style={{
+              marginTop: "10px",
+              padding: "10px 20px",
+              background: absenceReason.trim() ? "#F59E0B" : "#9CA3AF",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: absenceReason.trim() ? "pointer" : "not-allowed",
+              fontWeight: "bold",
             }}
           >
-            <h3 style={{ fontSize: "18px", marginBottom: "20px" }}>
-              📍 좌석 선택
-            </h3>
-
-            <SeatGrid
-              seats={seats}
-              reservations={reservations}
-              currentDate={currentDate}
-              grade={loggedInStudent.grade}
-              mode="select"
-              selectedSeat={selectedSeat}
-              onSeatClick={handleSeatClick}
-              loggedInStudentId={loggedInStudent.id}
-              students={students}
-            />
-
-            <button
-              onClick={handleReservation}
-              disabled={!selectedSeat || isReserving}
-              style={{
-                marginTop: "20px",
-                width: "100%",
-                padding: "15px",
-                background:
-                  selectedSeat && !isReserving ? "#10B981" : "#9CA3AF",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor:
-                  selectedSeat && !isReserving ? "pointer" : "not-allowed",
-                fontWeight: "bold",
-                fontSize: "16px",
-              }}
-            >
-              {isReserving
-                ? "⏳ 예약 처리 중..."
-                : selectedSeat
-                ? `${
-                    seats.find((s) => s.id === selectedSeat)?.number
-                  }번 좌석 예약하기`
-                : "좌석을 선택해주세요"}
-            </button>
-          </div>
-
-          <div
-            style={{
-              background: "#F3F4F6",
-              padding: "20px",
-              borderRadius: "8px",
-            }}
-          >
-            <h3 style={{ marginBottom: "15px" }}>📝 미입실 사유 제출</h3>
-            <textarea
-              value={absenceReason}
-              onChange={(e) => setAbsenceReason(e.target.value)}
-              placeholder="미입실 사유를 입력하세요"
-              style={{
-                width: "100%",
-                padding: "10px",
-                border: "1px solid #D1D5DB",
-                borderRadius: "6px",
-                minHeight: "100px",
-                fontSize: "14px",
-              }}
-            />
-            <button
-              onClick={handleAbsenceSubmit}
-              disabled={!absenceReason.trim()}
-              style={{
-                marginTop: "10px",
-                padding: "10px 20px",
-                background: absenceReason.trim() ? "#F59E0B" : "#9CA3AF",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: absenceReason.trim() ? "pointer" : "not-allowed",
-                fontWeight: "bold",
-              }}
-            >
-              사유 제출
-            </button>
-          </div>
-        </>
+            사유 제출
+          </button>
+        </div>
       )}
     </div>
   );

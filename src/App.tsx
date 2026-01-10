@@ -8,6 +8,7 @@ import KioskView from "./components/KioskView";
 import QueryView from "./components/QueryView";
 import LoginView from "./components/LoginView";
 import StudentPasswordChange from "./components/StudentPasswordChange";
+import UserPasswordChange from "./components/UserPasswordChange";
 import "./styles.css";
 
 // 타입 정의
@@ -25,6 +26,7 @@ export interface Student {
 
 export interface User {
   id: string;
+  username: string; // 🔥 추가
   email: string;
   role: string;
   name: string;
@@ -373,8 +375,8 @@ const App: React.FC = () => {
                 </button>
               )}
 
-              {/* 🔐 비밀번호 변경 - 학생 로그인 시에만 */}
-              {loggedInStudent && (
+              {/* 🔐 비밀번호 변경 버튼 - 학생/교사/관리자 모두 */}
+              {(loggedInStudent || loggedInUser) && (
                 <button
                   onClick={() => setView("password")}
                   style={{
@@ -512,6 +514,7 @@ const App: React.FC = () => {
             currentDate={currentDate}
           />
         )}
+
         {view === "kiosk" && (
           <KioskView
             students={students}
@@ -521,23 +524,30 @@ const App: React.FC = () => {
             onDataChange={loadData}
           />
         )}
+
         {view === "student" && (
           <StudentView
             loggedInStudent={loggedInStudent}
             loggedInUser={loggedInUser}
-            students={students} // 🔥 이 줄 추가!
+            students={students}
             seats={seats}
             reservations={reservations}
-            absences={absences} // 🔥 이것도 추가 (필요하면)
+            absences={absences}
             currentDate={currentDate}
             onDataChange={loadData}
             onShowLogin={() => setShowLogin(true)}
           />
         )}
-        {/* 🔐 비밀번호 변경 화면 */}
-        {view === "password" && (
+
+        {/* 🔐 비밀번호 변경 화면 - 학생/교사/관리자 구분 */}
+        {view === "password" && loggedInStudent && (
           <StudentPasswordChange loggedInStudent={loggedInStudent} />
         )}
+
+        {view === "password" && loggedInUser && (
+          <UserPasswordChange loggedInUser={loggedInUser} />
+        )}
+
         {view === "teacher" && (
           <TeacherView
             loggedInUser={loggedInUser}
@@ -549,6 +559,7 @@ const App: React.FC = () => {
             onDataChange={loadData}
           />
         )}
+
         {view === "admin" && (
           <AdminView
             loggedInUser={loggedInUser}
@@ -557,6 +568,7 @@ const App: React.FC = () => {
             onDataChange={loadData}
           />
         )}
+
         {view === "query" && (
           <QueryView
             students={students}
