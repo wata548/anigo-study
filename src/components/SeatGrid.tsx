@@ -25,26 +25,23 @@ const SeatGrid: React.FC<SeatGridProps> = ({
 }) => {
   const isMobile = window.innerWidth < 768;
 
-  // 좌석 클릭 가능 여부 확인
   const isSeatClickable = (seatId: string) => {
     if (mode === "view") return false;
 
-    // 🔒 로그인한 학생이 고정좌석을 가지고 있는지 확인
     if (loggedInStudentId) {
-      const loggedInStudent = students.find(
-        (st) => st.id === loggedInStudentId
+      const targetStudent = students.find(
+        (element) => element.id === loggedInStudentId
       );
 
-      // 고정좌석 학생은 자신의 고정좌석이 아닌 다른 좌석 클릭 불가
-      if (loggedInStudent?.fixed_seat_id) {
-        // 본인의 고정좌석도 클릭 불가 (예약 화면에서는 선택 자체가 안 되어야 함)
+      //Fix seat
+      if (targetStudent?.fixed_seat_id) {
         return false;
       }
     }
 
-    // 🔒 다른 학생의 고정좌석 체크
+    //check this seat is fix seat
     const fixedSeatStudent = students.find((st) => st.fixed_seat_id === seatId);
-    if (fixedSeatStudent && fixedSeatStudent.id !== loggedInStudentId) {
+    if (fixedSeatStudent && fixedSeatStudent.id != loggedInStudentId) {
       return false; // 다른 학생의 고정좌석은 클릭 불가
     }
 

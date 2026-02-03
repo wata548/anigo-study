@@ -94,9 +94,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
     const reservation = reservations.find(
       (r) => r.seat_id === seatId && r.date === currentDate
     );
+    const fixSeat = students.find(element => element.fixed_seat_id == seatId);
     if (reservation?.status === "입실완료") return "#D1FAE5";
-    if (reservation?.status === "예약") return "#FEF3C7";
-    if (reservation?.status === "미입실") return "#FEE2E2";
+    else if (reservation?.status === "예약") return "#FEF3C7";
+    else if (reservation?.status === "미입실") return "#FEE2E2";
+    //else if(fixSeat) return "rgb(202, 232, 255)";
     return "#F3F4F6";
   };
 

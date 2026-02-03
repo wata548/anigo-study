@@ -26,7 +26,7 @@ export interface Student {
 
 export interface User {
   id: string;
-  username: string; // 🔥 추가
+  username: string; 
   email: string;
   role: string;
   name: string;
