@@ -110,6 +110,7 @@ const KioskView: React.FC<KioskViewProps> = ({
   };
 
   const checkIn = async (barcode: string) => {
+    barcode = barcode.toUpperCase();
     const student = students.find((s) => s.barcode === barcode);
 
     if (!student) {
@@ -640,7 +641,7 @@ const KioskView: React.FC<KioskViewProps> = ({
             color: "#1F2937",
           }}
         >
-          학생증을 스캔해주세요
+          학생증 번호를 입력해주세요.
         </p>
         <input
           type="text"

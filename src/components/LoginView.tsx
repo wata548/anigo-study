@@ -25,18 +25,16 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onClose }) => {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [onClose]);
 
-  // 🔍 학생 ID 형식 검증 및 파싱 (GCCNN)
   const parseStudentId = (
     id: string
   ): { grade: number; class: number; number: number } | null => {
-    // 5자리 숫자인지 확인
-    if (!/^\d{5}$/.test(id)) {
+    if (!/^\d{4}$/.test(id)) {
       return null;
     }
 
-    const grade = parseInt(id[0]); // 첫 번째 자리: 학년
-    const classNum = parseInt(id.substring(1, 3)); // 2-3번째 자리: 반
-    const number = parseInt(id.substring(3, 5)); // 4-5번째 자리: 번호
+    const grade = parseInt(id[0]);    
+    const classNum = parseInt(id[1]); 
+    const number = parseInt(id.substring(2, 4));
 
     // 유효성 검증
     if (grade < 1 || grade > 3) return null;
@@ -223,7 +221,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onClose }) => {
               type="text"
               value={loginId}
               onChange={(e) => setLoginId(e.target.value)}
-              placeholder="학생: 학번5자리 / 교사: teacher / 관리자: admin"
+              placeholder="학생: 학번4자리"
               style={{
                 width: "90%",
                 padding: "12px 16px",
@@ -244,7 +242,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onClose }) => {
                 lineHeight: "1.5",
               }}
             >
-              💡 학생: 5자리 숫자 (학년+반+번호, 예: 20315)
+              💡 학생: 4자리 숫자 (학년+반+번호, 예: 2415)
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;교사/관리자: 아이디 입력
             </p>
