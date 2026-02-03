@@ -5,6 +5,7 @@ import App from "./App";
 const rootElement = document.getElementById("root")!;
 const root = ReactDOM.createRoot(rootElement);
 
+console.log('successly open');
 root.render(
   <React.StrictMode>
     <App />
