@@ -453,7 +453,7 @@ const QueryView: React.FC<QueryViewProps> = ({
                         displayText = s.reservation.seat_id || "출석";
                         bgColor = "#D1FAE5";
                       } else if (s.reservation?.status === "예약") {
-                        displayText = "예약";
+                        displayText = s.reservation.seat_id;//"예약";
                         bgColor = "#FEF3C7";
                       } else if (s.reservation?.status === "미입실") {
                         displayText = "미입실";

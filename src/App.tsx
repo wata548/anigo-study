@@ -101,6 +101,27 @@ export const generateSeats = (): Seat[] => {
   return seats;
 };
 
+const getSystemDate = (): string => {
+  const now = new Date();
+
+  // 한국 시간으로 변환 (UTC+9)
+  const kstOffset = 9 * 60; // 9시간을 분으로
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const kstTime = new Date(utcTime + (kstOffset * 60000));
+
+  const kstHour = kstTime.getHours();
+
+  // 한국 시간 기준 오전 8시 이전이면 전날 날짜 사용
+  if (kstHour < 8) {
+    const yesterday = new Date(kstTime);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split("T")[0];
+  }
+
+  // 한국 시간 기준 오전 8시 이후면 당일 날짜 사용
+  return kstTime.toISOString().split("T")[0];
+};
+
 const App: React.FC = () => {
   const [view, setView] = useState("dashboard");
   const [students, setStudents] = useState<Student[]>([]);
@@ -170,7 +191,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const updateDate = () => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getSystemDate();
       if (currentDate !== today) {
         setCurrentDate(today);
       }
