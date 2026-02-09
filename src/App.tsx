@@ -133,9 +133,7 @@ const App: React.FC = () => {
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
-  const [displayDate, setDisplayDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [displayDate, setDisplayDate] = useState(getSystemDate());
 
   useEffect(() => {
     console.log("🔍 로그인 정보 복구 시도...");
@@ -168,8 +166,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const updateDisplayDate = () => {
-      const today = new Date().toISOString().split("T")[0];
-      setDisplayDate(today);
+      setDisplayDate(displayDate);
     };
 
     updateDisplayDate();
@@ -179,7 +176,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getSystemDate();
     setCurrentDate(today);
   }, []);
 
