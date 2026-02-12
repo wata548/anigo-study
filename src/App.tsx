@@ -102,24 +102,15 @@ export const generateSeats = (): Seat[] => {
 };
 
 const getSystemDate = (): string => {
-  const now = new Date();
+  const date = new Date();
 
-  // 한국 시간으로 변환 (UTC+9)
-  const kstOffset = 9 * 60; // 9시간을 분으로
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const kstTime = new Date(utcTime + (kstOffset * 60000));
+  const hour = date.getHours();
+  console.log(date.getDate())
 
-  const kstHour = kstTime.getHours();
-
-  // 한국 시간 기준 오전 8시 이전이면 전날 날짜 사용
-  if (kstHour < 8) {
-    const yesterday = new Date(kstTime);
-    yesterday.setDate(yesterday.getDate() - 1);
-    return yesterday.toISOString().split("T")[0];
+  if (hour < 8) {
+    date.setDate(date.getDate() - 1);
   }
-
-  // 한국 시간 기준 오전 8시 이후면 당일 날짜 사용
-  return kstTime.toISOString().split("T")[0];
+  return date.toLocaleDateString("sv-SE", {timeZone: "Asia/Seoul"});
 };
 
 const App: React.FC = () => {
@@ -136,7 +127,7 @@ const App: React.FC = () => {
   const [displayDate, setDisplayDate] = useState(getSystemDate());
 
   useEffect(() => {
-    console.log("🔍 로그인 정보 복구 시도...");
+    console.log("Restore login info...");
 
     const savedStudent = localStorage.getItem("loggedInStudent");
     const savedUser = localStorage.getItem("loggedInUser");
@@ -144,10 +135,8 @@ const App: React.FC = () => {
     if (savedStudent) {
       try {
         const student = JSON.parse(savedStudent);
-        console.log("✅ 학생 로그인 복구:", student);
         setLoggedInStudent(student);
       } catch (error) {
-        console.error("❌ 학생 로그인 복구 오류:", error);
         localStorage.removeItem("loggedInStudent");
       }
     }
@@ -155,10 +144,10 @@ const App: React.FC = () => {
     if (savedUser) {
       try {
         const user = JSON.parse(savedUser);
-        console.log("✅ 사용자 로그인 복구:", user);
+        console.log("Success to restore login info");
         setLoggedInUser(user);
       } catch (error) {
-        console.error("❌ 사용자 로그인 복구 오류:", error);
+        console.error("Fail to restore login info", error);
         localStorage.removeItem("loggedInUser");
       }
     }
@@ -176,11 +165,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const today = getSystemDate();
-    setCurrentDate(today);
-  }, []);
-
-  useEffect(() => {
     if (currentDate) {
       loadData();
     }
@@ -189,16 +173,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const updateDate = () => {
       const today = getSystemDate();
-      if (currentDate !== today) {
-        setCurrentDate(today);
-      }
+      setCurrentDate(today);
     };
 
     updateDate();
     const interval = setInterval(updateDate, 60000);
-
     return () => clearInterval(interval);
-  }, [currentDate]);
+  }, []);
 
   const loadData = async () => {
     try {
