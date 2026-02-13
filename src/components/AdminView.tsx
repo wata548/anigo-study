@@ -165,12 +165,14 @@ const AdminView: React.FC<AdminViewProps> = ({
           return;
         }
 
+        console.log("DeleteStart")
         const { error: deleteError } = await supabase
           .from("students")
           .delete()
           .neq("id", "");
 
         if (deleteError) throw deleteError;
+        console.log("DeleteSuccess")
 
         const { error: insertError } = await supabase
           .from("students")
@@ -278,33 +280,28 @@ const AdminView: React.FC<AdminViewProps> = ({
 
         await supabase.from("students").delete().in("id", grade3Ids);
       }
+      console.log("Success to delete 3grade's data");
 
       // ✅ 3단계: 2학년 → 3학년
       if (grade2Students.length > 0) {
+        await supabase.from("students").delete().eq("grade", 2);
+
+        var new3students = [];
         for (const student of grade2Students) {
           const oldId = student.id;
-          const newId = `3${student.class}${String(student.number).padStart(
-            2,
-            "0"
-          )}`;
+          const newId = `3${student.class}${String(student.number).padStart(2,"0")}`;
 
-          const { error: insertError } = await supabase
-            .from("students")
-            .insert([
-              {
-                id: newId,
-                grade: 3,
-                class: student.class,
-                number: student.number,
-                name: student.name,
-                barcode: student.barcode,
-                password: student.password,
-                fixed_seat_id: null, // 고정좌석 초기화
-                is_withdrawn: student.is_withdrawn,
-              },
-            ]);
-
-          if (insertError) throw insertError;
+          new3students.push({
+            id: newId,
+            grade: 3,
+            class: student.class,
+            number: student.number,
+            name: student.name,
+            barcode: student.barcode,
+            password: student.password,
+            fixed_seat_id: null, // 고정좌석 초기화
+            is_withdrawn: student.is_withdrawn,
+          });
 
           // 올해 예약/사유 데이터의 student_id 업데이트
           await supabase
@@ -331,13 +328,19 @@ const AdminView: React.FC<AdminViewProps> = ({
             .update({ student_id: newId })
             .eq("student_id", oldId)
             .lt("date", `${currentYear}-01-01`);
-
-          await supabase.from("students").delete().eq("id", oldId);
         }
+
+        const { error: insertError } = await supabase
+          .from("students")
+          .insert(new3students);
+        console.log(insertError)
+        if (insertError) throw insertError;
       }
+      console.log("Success to prome 2grade's data");
 
       // ✅ 4단계: 1학년 → 2학년
       if (grade1Students.length > 0) {
+        var new2students = [];
         for (const student of grade1Students) {
           const oldId = student.id;
           const newId = `2${student.class}${String(student.number).padStart(
@@ -345,25 +348,18 @@ const AdminView: React.FC<AdminViewProps> = ({
             "0"
           )}`;
 
-          const { error: insertError } = await supabase
-            .from("students")
-            .insert([
-              {
-                id: newId,
-                grade: 2,
-                class: student.class,
-                number: student.number,
-                name: student.name,
-                barcode: student.barcode,
-                password: student.password,
-                fixed_seat_id: null, // 고정좌석 초기화
-                is_withdrawn: student.is_withdrawn,
-              },
-            ]);
+          new2students.push({
+            id: newId,
+            grade: 2,
+            class: student.class,
+            number: student.number,
+            name: student.name,
+            barcode: student.barcode,
+            password: student.password,
+            fixed_seat_id: null, // 고정좌석 초기화
+            is_withdrawn: student.is_withdrawn,
+          });
 
-          if (insertError) throw insertError;
-
-          // 올해 예약/사유 데이터의 student_id 업데이트
           await supabase
             .from("reservations")
             .update({ student_id: newId })
@@ -391,6 +387,11 @@ const AdminView: React.FC<AdminViewProps> = ({
 
           await supabase.from("students").delete().eq("id", oldId);
         }
+        const { error: insertError } = await supabase
+          .from("students")
+          .insert(new2students);
+        console.log(insertError)
+        if (insertError) throw insertError;
       }
 
       alert(

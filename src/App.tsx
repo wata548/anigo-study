@@ -105,7 +105,6 @@ const getSystemDate = (): string => {
   const date = new Date();
 
   const hour = date.getHours();
-  console.log(date.getDate())
 
   if (hour < 8) {
     date.setDate(date.getDate() - 1);

@@ -40,6 +40,14 @@ const StudentPasswordChange: React.FC<StudentPasswordChangeProps> = ({
       return;
     }
 
+    if(newPassword.indexOf(',') != -1 || newPassword.indexOf('"')  != -1|| newPassword.indexOf('\'') != -1){
+      setMessage({
+        type: "error",
+        text: "비밀번호에는 ,\"\'등의 문자를 사용할 수 없습니다.",
+      });
+      return;
+    }
+
     if (newPassword.length < 4) {
       setMessage({
         type: "error",
