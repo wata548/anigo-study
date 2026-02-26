@@ -243,7 +243,64 @@ const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handlePromote = async () => {
+  async function Promote(grade: number) {
+    const targetStudents = students.filter((s) => s.grade == grade);
+
+    if (targetStudents.length <= 0)
+      return;
+
+    var newstudents = [];
+    for (const student of targetStudents) {
+      const oldId = student.id;
+      const newId = `${grade + 1}${student.class}${String(student.number).padStart(2, "0")}`;
+
+      newstudents.push({
+        id: newId,
+        grade: grade + 1,
+        class: student.class,
+        number: student.number,
+        name: student.name,
+        barcode: student.barcode,
+        password: student.password,
+        fixed_seat_id: null, // 고정좌석 초기화
+        is_withdrawn: student.is_withdrawn,
+      });
+    }
+
+    const { error: insertError } = await supabase
+      .from("students")
+      .insert(newstudents);
+    if (insertError) throw insertError;
+
+    for (const student of targetStudents) {
+      const oldId = student.id;
+      const newId = `${grade + 1}${student.class}${String(student.number).padStart(2, "0")}`;
+      // 올해 예약/사유 데이터의 student_id 업데이트
+      await supabase
+        .from("reservations")
+        .update({ student_id: newId })
+        .eq("student_id", oldId)
+        .gte("date", `${currentYear}-01-01`);
+
+      await supabase
+        .from("absences")
+        .update({ student_id: newId })
+        .eq("student_id", oldId)
+        .gte("date", `${currentYear}-01-01`);
+
+      // 작년 데이터도 업데이트 (삭제하지 않고 유지)
+      await supabase
+        .from("reservations")
+        .update({ student_id: newId })
+        .eq("student_id", oldId)
+        .lt("date", `${currentYear}-01-01`);
+    }
+
+    await supabase.from("students").delete().eq("grade", grade);
+    console.log(`Success to prome ${grade}grade's data`);
+  }
+
+const handlePromote = async () => {
     try {
       const grade1Students = students.filter((s) => s.grade === 1);
       const grade2Students = students.filter((s) => s.grade === 2);
@@ -282,118 +339,8 @@ const AdminView: React.FC<AdminViewProps> = ({
       }
       console.log("Success to delete 3grade's data");
 
-      // ✅ 3단계: 2학년 → 3학년
-      if (grade2Students.length > 0) {
-        await supabase.from("students").delete().eq("grade", 2);
-
-        var new3students = [];
-        for (const student of grade2Students) {
-          const oldId = student.id;
-          const newId = `3${student.class}${String(student.number).padStart(2,"0")}`;
-
-          new3students.push({
-            id: newId,
-            grade: 3,
-            class: student.class,
-            number: student.number,
-            name: student.name,
-            barcode: student.barcode,
-            password: student.password,
-            fixed_seat_id: null, // 고정좌석 초기화
-            is_withdrawn: student.is_withdrawn,
-          });
-
-          // 올해 예약/사유 데이터의 student_id 업데이트
-          await supabase
-            .from("reservations")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .gte("date", `${currentYear}-01-01`);
-
-          await supabase
-            .from("absences")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .gte("date", `${currentYear}-01-01`);
-
-          // 작년 데이터도 업데이트 (삭제하지 않고 유지)
-          await supabase
-            .from("reservations")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .lt("date", `${currentYear}-01-01`);
-
-          await supabase
-            .from("absences")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .lt("date", `${currentYear}-01-01`);
-        }
-
-        const { error: insertError } = await supabase
-          .from("students")
-          .insert(new3students);
-        console.log(insertError)
-        if (insertError) throw insertError;
-      }
-      console.log("Success to prome 2grade's data");
-
-      // ✅ 4단계: 1학년 → 2학년
-      if (grade1Students.length > 0) {
-        var new2students = [];
-        for (const student of grade1Students) {
-          const oldId = student.id;
-          const newId = `2${student.class}${String(student.number).padStart(
-            2,
-            "0"
-          )}`;
-
-          new2students.push({
-            id: newId,
-            grade: 2,
-            class: student.class,
-            number: student.number,
-            name: student.name,
-            barcode: student.barcode,
-            password: student.password,
-            fixed_seat_id: null, // 고정좌석 초기화
-            is_withdrawn: student.is_withdrawn,
-          });
-
-          await supabase
-            .from("reservations")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .gte("date", `${currentYear}-01-01`);
-
-          await supabase
-            .from("absences")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .gte("date", `${currentYear}-01-01`);
-
-          // 작년 데이터도 업데이트 (삭제하지 않고 유지)
-          await supabase
-            .from("reservations")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .lt("date", `${currentYear}-01-01`);
-
-          await supabase
-            .from("absences")
-            .update({ student_id: newId })
-            .eq("student_id", oldId)
-            .lt("date", `${currentYear}-01-01`);
-
-          await supabase.from("students").delete().eq("id", oldId);
-        }
-        const { error: insertError } = await supabase
-          .from("students")
-          .insert(new2students);
-        console.log(insertError)
-        if (insertError) throw insertError;
-      }
-
+      await Promote(2);
+      await Promote(1);
       alert(
         `✅ 진급 처리가 완료되었습니다!\n\n처리 내역:\n- 1학년 → 2학년: ${grade1Students.length}명\n- 2학년 → 3학년: ${grade2Students.length}명\n- 3학년 졸업: ${grade3Students.length}명\n- 고정 좌석 초기화 완료\n- 예약/사유 데이터 유지됨`
       );
